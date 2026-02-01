@@ -1,4 +1,4 @@
-package com.fleet.management.model.entity;
+package com.DevCast.Fleet_Management.model;
 
 import com.DevCast.Fleet_Management.model.Company;
 import com.DevCast.Fleet_Management.model.User;

@@ -1,5 +1,6 @@
 package com.DevCast.Fleet_Management.model;
 
+import com.DevCast.Fleet_Management.model.util.Role;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -37,7 +38,7 @@ public class User {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private UserRole role;
+    private Role role;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -60,13 +61,6 @@ public class User {
         updatedAt = LocalDateTime.now();
     }
 
-    public enum UserRole {
-        OWNER,
-        ADMIN,
-        FLEET_MANAGER,
-        ACCOUNTANT,
-        DRIVER
-    }
 
     public enum UserStatus {
         ACTIVE,
