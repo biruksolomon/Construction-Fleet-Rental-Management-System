@@ -8,8 +8,8 @@
 		<version>4.0.2</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
-	<groupId>com.DevCast</groupId>
-	<artifactId>Fleet-Management</artifactId>
+	<groupId>com.devcast</groupId>
+	<artifactId>-fleetmanagement</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>Fleet-Management</name>
 	<description>Demo project for Spring Boot</description>
