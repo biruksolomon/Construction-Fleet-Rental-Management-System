@@ -80,6 +80,15 @@ public class SecurityConfig {
                 // Authorization rules
                 .authorizeHttpRequests(auth -> auth
 
+                        // -------- SWAGGER / OPENAPI (PUBLIC) --------
+                        .requestMatchers(
+                                "/swagger-ui.html",
+                                "/swagger-ui/**",
+                                "/v3/api-docs/**",
+                                "/swagger-resources/**",
+                                "/webjars/**"
+                        ).permitAll()
+
                         // -------- PUBLIC ENDPOINTS --------
                         .requestMatchers(HttpMethod.POST,
                                 "/api/auth/register",
