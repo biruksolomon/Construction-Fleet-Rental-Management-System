@@ -61,7 +61,6 @@ public class User {
         updatedAt = LocalDateTime.now();
     }
 
-
     public enum UserStatus {
         ACTIVE,
         INACTIVE
