@@ -1,6 +1,7 @@
 package com.devcast.fleetmanagement.features.driver.service;
 
 
+import com.devcast.fleetmanagement.features.driver.dto.*;
 import com.devcast.fleetmanagement.features.driver.model.Driver;
 import com.devcast.fleetmanagement.features.driver.model.DriverWorkLimit;
 import org.springframework.data.domain.Page;
@@ -288,86 +289,5 @@ public interface DriverService {
      */
     List<Driver> importDriversFromCSV(Long companyId, byte[] csvData);
 
-    // Data Transfer Objects
 
-    record LicenseStatus(
-            Long driverId,
-            String licenseNumber,
-            String licenseType,
-            Long expiryDate,
-            boolean isValid,
-            Long daysUntilExpiry
-    ) {}
-
-    record DocumentVerificationStatus(
-            Long driverId,
-            String licenseStatus,
-            String insuranceStatus,
-            String backgroundCheckStatus,
-            Long lastVerificationDate,
-            boolean allDocumentsValid
-    ) {}
-
-    record WorkHoursSummary(
-            Long driverId,
-            Long totalHours,
-            Double averageDaily,
-            Long maxDailyHours,
-            Long minDailyHours,
-            int workDays
-    ) {}
-
-    record DriverPerformance(
-            Long driverId,
-            Double safetyScore,
-            Double efficiencyScore,
-            Double punctualityScore,
-            Double overallScore,
-            String rating
-    ) {}
-
-    record DriverSafetyConcern(
-            Long driverId,
-            String driverName,
-            int incidentCount,
-            String recentIncident,
-            String recommendedAction
-    ) {}
-
-    record DriverIncident(
-            Long incidentId,
-            Long driverId,
-            String type,
-            String description,
-            Long date,
-            String severity
-    ) {}
-
-    record DriverSalaryComponents(
-            Long driverId,
-            BigDecimal baseSalary,
-            BigDecimal workHourBonus,
-            BigDecimal performanceBonus,
-            BigDecimal incentives,
-            BigDecimal deductions,
-            BigDecimal netSalary
-    ) {}
-
-    record DriverVehicleHistory(
-            Long driverId,
-            String driverName,
-            Long vehicleId,
-            String registrationNumber,
-            Long assignmentDate,
-            Long endDate,
-            String status
-    ) {}
-
-    record DriverFilterCriteria(
-            String status,
-            String licenseType,
-            Double minRating,
-            Long fromDate,
-            Long toDate
-    ) {}
 }

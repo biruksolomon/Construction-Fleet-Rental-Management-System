@@ -1,5 +1,6 @@
 package com.devcast.fleetmanagement.features.company.service;
 
+import com.devcast.fleetmanagement.features.company.dto.*;
 import com.devcast.fleetmanagement.features.company.model.Company;
 import com.devcast.fleetmanagement.features.company.model.CompanySetting;
 import com.devcast.fleetmanagement.features.company.model.PricingRule;
@@ -128,28 +129,9 @@ public interface CompanyService {
     void renewSubscription(Long companyId, int months);
 
     // Data Transfer Objects
-    record CompanyStatistics(
-            Long totalVehicles,
-            Long totalDrivers,
-            Long totalClients,
-            Long activeRentals,
-            Double totalRevenue,
-            Double pendingAmount
-    ) {}
 
-    record CompanySubscriptionInfo(
-            String subscriptionType,
-            String status,
-            Long expiryDate,
-            Long maxVehicles,
-            Long maxUsers,
-            Double monthlyCost
-    ) {}
 
-    record RevenueMetrics(
-            Double totalIncome,
-            Double totalExpenses,
-            Double netProfit,
-            Long transactionCount
-    ) {}
+
+
+
 }

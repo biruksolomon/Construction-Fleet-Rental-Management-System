@@ -1,5 +1,6 @@
 package com.devcast.fleetmanagement.features.auth.service;
 
+import com.devcast.fleetmanagement.features.auth.dto.*;
 import java.util.Optional;
 
 /**
@@ -69,26 +70,9 @@ public interface AuthenticationService {
 
     // Data Transfer Objects
 
-    record AuthenticationResponse(
-            String accessToken,
-            String refreshToken,
-            Long expiresIn,
-            String tokenType,
-            UserInfo userInfo
-    ) {}
 
-    record UserInfo(
-            Long userId,
-            String email,
-            String fullName,
-            String role,
-            Long companyId
-    ) {}
 
-    record RegistrationRequest(
-            String email,
-            String password,
-            String fullName,
-            Long companyId
-    ) {}
+
+
+
 }

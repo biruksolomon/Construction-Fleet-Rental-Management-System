@@ -1,5 +1,6 @@
 package com.devcast.fleetmanagement.features.audit.service;
 
+import com.devcast.fleetmanagement.features.audit.dto.*;
 import com.devcast.fleetmanagement.features.audit.model.AuditLog;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -146,89 +147,4 @@ public interface AuditLogService {
      * Set retention policy
      */
     void setRetentionPolicy(Long companyId, RetentionPolicy policy);
-
-    // Data Transfer Objects
-
-    record UserActivity(
-            Long userId,
-            String userName,
-            String action,
-            String entityType,
-            Long entityId,
-            Long timestamp,
-            String ipAddress,
-            String userAgent
-    ) {}
-
-    record SuspiciousActivity(
-            Long activityId,
-            Long userId,
-            String activityType,
-            String description,
-            String severity,
-            Long timestamp,
-            String recommendation
-    ) {}
-
-    record FailedLoginAttempt(
-            Long attemptId,
-            String email,
-            Long timestamp,
-            String ipAddress,
-            String reason
-    ) {}
-
-    record UnauthorizedAccess(
-            Long accessId,
-            Long userId,
-            String attemptedResource,
-            Long timestamp,
-            String ipAddress,
-            String permission
-    ) {}
-
-    record EntityChangeRecord(
-            Long changeId,
-            String entityType,
-            Long entityId,
-            Long userId,
-            String action,
-            String oldValue,
-            String newValue,
-            Long timestamp
-    ) {}
-
-    record DataChangeTrail(
-            Long changeId,
-            Long userId,
-            String fieldName,
-            String oldValue,
-            String newValue,
-            Long timestamp
-    ) {}
-
-    record DeletedRecord(
-            Long recordId,
-            String entityType,
-            Long entityId,
-            Long userId,
-            Long deletionDate,
-            String reason
-    ) {}
-
-    record DataIntegrityReport(
-            Long companyId,
-            boolean isIntegrityValid,
-            List<String> anomalies,
-            List<String> recommendations,
-            Long reportDate
-    ) {}
-
-    record RetentionPolicy(
-            int retentionDays,
-            boolean autoArchive,
-            boolean autoDelete,
-            String archiveLocation,
-            String deletionApprovalRequired
-    ) {}
 }

@@ -21,7 +21,7 @@ import org.slf4j.LoggerFactory;
 public class PermissionCheckAspect {
     private static final Logger logger = LoggerFactory.getLogger(PermissionCheckAspect.class);
 
-    @Before("@annotation(com.fleet.management.security.annotation.RequirePermission)")
+    @Before("@annotation(RequirePermission)")
     public void checkPermission(JoinPoint joinPoint, RequirePermission requirePermission) {
         Permission requiredPermission = requirePermission.value();
 
