@@ -11,4 +11,9 @@ public interface DriverRepository extends JpaRepository<Driver, Long> {
     Optional<Driver> findByLicenseNumber(String licenseNumber);
     List<Driver> findByCompanyId(Long companyId);
     List<Driver> findByCompanyIdAndStatus(Long companyId, Driver.DriverStatus status);
+
+    /**
+     * Count drivers for a company
+     */
+    long countByCompanyId(Long companyId);
 }

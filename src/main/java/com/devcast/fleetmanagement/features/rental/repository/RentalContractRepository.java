@@ -14,4 +14,9 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
     List<RentalContract> findByClientId(Long clientId);
     List<RentalContract> findByCompanyIdAndStatus(Long companyId, RentalContract.ContractStatus status);
     List<RentalContract> findByStartDateBetween(LocalDate startDate, LocalDate endDate);
+
+    /**
+     * Count active rental contracts for a company
+     */
+    long countByCompanyIdAndStatus(Long companyId, RentalContract.ContractStatus status);
 }
