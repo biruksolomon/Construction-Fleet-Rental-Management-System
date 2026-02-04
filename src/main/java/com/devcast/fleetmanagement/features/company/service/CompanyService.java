@@ -1,12 +1,7 @@
 package com.devcast.fleetmanagement.features.company.service;
 
-import com.devcast.fleetmanagement.features.company.dto.CompanyStatistics;
-import com.devcast.fleetmanagement.features.company.dto.CompanySubscriptionInfo;
-import com.devcast.fleetmanagement.features.company.dto.RevenueMetrics;
-import com.devcast.fleetmanagement.features.company.model.Client;
+import com.devcast.fleetmanagement.features.company.dto.*;
 import com.devcast.fleetmanagement.features.company.model.Company;
-import com.devcast.fleetmanagement.features.company.model.CompanySetting;
-import com.devcast.fleetmanagement.features.company.model.PricingRule;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -14,15 +9,23 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Company Service Interface
- * Defines contract for company-related operations including:
+ * Company Service Interface (DTO-Based)
+ *
+ * Defines contract for company-related operations using DTOs to separate
+ * API contracts from entity persistence.
+ *
+ * Design Principles:
+ * 1. All requests use *Request DTOs (no client-provided IDs or timestamps)
+ * 2. All responses use *Response DTOs (complete information for display)
+ * 3. Service never exposes raw entities through API contracts
+ * 4. RBAC checks performed in implementation
+ *
+ * Includes:
  * - Company CRUD operations
  * - Company settings management
  * - Pricing rules management
  * - Client management
- * - Company analytics (statistics, revenue metrics, subscription info)
- *
- * All operations follow RBAC rules defined in implementation
+ * - Company analytics and statistics
  */
 public interface CompanyService {
 
@@ -30,32 +33,36 @@ public interface CompanyService {
 
     /**
      * Create a new company
+     * Request: CompanyCreateRequest (no id, timestamps)
+     * Response: CompanyResponse (complete entity representation)
      * RBAC: OWNER only
      */
-    Company createCompany(Company company);
+    CompanyResponse createCompany(CompanyCreateRequest request);
 
     /**
      * Get company by ID with multi-tenant check
      * RBAC: OWNER (all companies), Others (own company only)
      */
-    Optional<Company> getCompanyById(Long companyId);
+    Optional<CompanyResponse> getCompanyById(Long companyId);
 
     /**
      * Get company by name
      * RBAC: OWNER only
      */
-    Optional<Company> getCompanyByName(String name);
+    Optional<CompanyResponse> getCompanyByName(String name);
 
     /**
      * Update company details
+     * Request: CompanyUpdateRequest (all fields optional, no id/timestamps)
+     * Response: CompanyResponse (updated entity representation)
      * RBAC: OWNER, ADMIN (own company only)
      */
-    Company updateCompany(Long companyId, Company companyDetails);
+    CompanyResponse updateCompany(Long companyId, CompanyUpdateRequest request);
 
     /**
      * Delete company and cascade all related data
      * RBAC: OWNER only
-     * WARNING: Destructive operation
+     * WARNING: Destructive operation - all related data deleted
      */
     void deleteCompany(Long companyId);
 
@@ -63,7 +70,7 @@ public interface CompanyService {
      * Get all companies with pagination
      * RBAC: OWNER (all), Others (own company filtered)
      */
-    Page<Company> getAllCompanies(Pageable pageable);
+    Page<CompanyResponse> getAllCompanies(Pageable pageable);
 
     /**
      * Get company status
@@ -72,13 +79,16 @@ public interface CompanyService {
     Company.CompanyStatus getCompanyStatus(Long companyId);
 
     /**
-     * Suspend company
+     * Suspend company - prevents all operations
      * RBAC: OWNER only
+     *
+     * @param companyId the company to suspend
+     * @param reason optional reason for suspension (logged for audit)
      */
     void suspendCompany(Long companyId, String reason);
 
     /**
-     * Activate company
+     * Activate company - resumes normal operations
      * RBAC: OWNER only
      */
     void activateCompany(Long companyId);
@@ -87,15 +97,17 @@ public interface CompanyService {
 
     /**
      * Save or update company settings
+     * Request: CompanySettingRequest (validated setting data)
+     * Response: CompanySettingResponse (complete setting representation)
      * RBAC: OWNER, ADMIN (own company only)
      */
-    CompanySetting saveSetting(Long companyId, String key, String value, CompanySetting.DataType dataType);
+    CompanySettingResponse saveSetting(Long companyId, CompanySettingRequest request);
 
     /**
      * Get all settings for a company
      * RBAC: Multi-tenant check
      */
-    List<CompanySetting> getCompanySettings(Long companyId);
+    List<CompanySettingResponse> getCompanySettings(Long companyId);
 
     /**
      * Get specific setting value
@@ -106,6 +118,10 @@ public interface CompanyService {
     /**
      * Update setting value
      * RBAC: OWNER, ADMIN (own company only)
+     *
+     * @param companyId the company whose setting to update
+     * @param key the setting key
+     * @param value the new value
      */
     void updateSetting(Long companyId, String key, String value);
 
@@ -119,42 +135,46 @@ public interface CompanyService {
 
     /**
      * Create pricing rule for company
+     * Request: PricingRuleRequest (validated rule data)
+     * Response: PricingRuleResponse (complete rule representation)
      * RBAC: OWNER only
      */
-    PricingRule createPricingRule(Long companyId, PricingRule rule);
+    PricingRuleResponse createPricingRule(Long companyId, PricingRuleRequest request);
 
     /**
      * Get all pricing rules for company
      * RBAC: Multi-tenant check
      */
-    List<PricingRule> getPricingRules(Long companyId);
+    List<PricingRuleResponse> getPricingRules(Long companyId);
 
     /**
      * Get active pricing rules for company
      * RBAC: Multi-tenant check
      */
-    List<PricingRule> getActivePricingRules(Long companyId);
+    List<PricingRuleResponse> getActivePricingRules(Long companyId);
 
     /**
      * Get pricing rules by type
      * RBAC: Multi-tenant check
      */
-    List<PricingRule> getPricingRulesByType(Long companyId, PricingRule.PricingType type);
+    List<PricingRuleResponse> getPricingRulesByType(Long companyId, String pricingType);
 
     /**
      * Update pricing rule
+     * Request: PricingRuleRequest (validated rule data, no id/timestamps)
+     * Response: PricingRuleResponse (updated rule representation)
      * RBAC: OWNER only
      */
-    PricingRule updatePricingRule(Long companyId, Long ruleId, PricingRule rule);
+    PricingRuleResponse updatePricingRule(Long companyId, Long ruleId, PricingRuleRequest request);
 
     /**
-     * Deactivate pricing rule
+     * Deactivate pricing rule - rule no longer used for calculations
      * RBAC: OWNER only
      */
     void deactivatePricingRule(Long companyId, Long ruleId);
 
     /**
-     * Activate pricing rule
+     * Activate pricing rule - rule available for use
      * RBAC: OWNER only
      */
     void activatePricingRule(Long companyId, Long ruleId);
@@ -169,33 +189,37 @@ public interface CompanyService {
 
     /**
      * Create client for company
+     * Request: ClientRequest (validated client data)
+     * Response: ClientResponse (complete client representation)
      * RBAC: OWNER, ADMIN, FLEET_MANAGER (own company)
      */
-    Client createClient(Long companyId, Client client);
+    ClientResponse createClient(Long companyId, ClientRequest request);
 
     /**
      * Get client by ID
      * RBAC: Multi-tenant check
      */
-    Optional<Client> getClientById(Long companyId, Long clientId);
+    Optional<ClientResponse> getClientById(Long companyId, Long clientId);
 
     /**
      * Get all clients for company
      * RBAC: Multi-tenant check
      */
-    List<Client> getCompanyClients(Long companyId);
+    List<ClientResponse> getCompanyClients(Long companyId);
 
     /**
-     * Search clients by name
+     * Search clients by name or email
      * RBAC: Multi-tenant check
      */
-    List<Client> searchClients(Long companyId, String searchTerm);
+    List<ClientResponse> searchClients(Long companyId, String searchTerm);
 
     /**
      * Update client
+     * Request: ClientRequest (validated client data, all fields optional)
+     * Response: ClientResponse (updated client representation)
      * RBAC: OWNER, ADMIN, FLEET_MANAGER (own company)
      */
-    Client updateClient(Long companyId, Long clientId, Client clientDetails);
+    ClientResponse updateClient(Long companyId, Long clientId, ClientRequest request);
 
     /**
      * Delete client
@@ -220,12 +244,15 @@ public interface CompanyService {
     /**
      * Get revenue metrics for period
      * RBAC: OWNER, ADMIN, ACCOUNTANT (own company)
+     *
+     * @param companyId the company
+     * @param period format: "YYYY-MM" for monthly or "YYYY" for yearly
      */
     RevenueMetrics getRevenueMetrics(Long companyId, String period);
 
     /**
      * Check if company is active and subscription valid
-     * RBAC: None (utility method, but can check ownership after)
+     * RBAC: None (utility method)
      */
     boolean isCompanyActive(Long companyId);
 

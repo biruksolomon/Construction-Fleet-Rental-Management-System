@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "pricing_rules")
@@ -42,6 +43,12 @@ public class PricingRule {
 
     @Column(nullable = false)
     private Boolean active;
+
+    @Column(nullable = false,updatable = false)
+    private LocalDateTime createdAt;
+
+    @Column
+    private LocalDateTime updatedAt;
 
     public enum AppliesToType {
         VEHICLE,

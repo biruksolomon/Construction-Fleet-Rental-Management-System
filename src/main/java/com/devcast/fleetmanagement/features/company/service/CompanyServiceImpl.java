@@ -1,8 +1,6 @@
 package com.devcast.fleetmanagement.features.company.service;
 
-import com.devcast.fleetmanagement.features.company.dto.CompanyStatistics;
-import com.devcast.fleetmanagement.features.company.dto.CompanySubscriptionInfo;
-import com.devcast.fleetmanagement.features.company.dto.RevenueMetrics;
+import com.devcast.fleetmanagement.features.company.dto.*;
 import com.devcast.fleetmanagement.features.company.model.Client;
 import com.devcast.fleetmanagement.features.company.model.Company;
 import com.devcast.fleetmanagement.features.company.model.CompanySetting;
@@ -33,6 +31,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Company Service Implementation
@@ -65,11 +65,15 @@ public class CompanyServiceImpl implements CompanyService {
 
     @Override
     @RequirePermission(Permission.CREATE_COMPANY)
-    public Company createCompany(Company company) {
-        log.info("Creating new company: {}", company.getName());
+    public CompanyResponse createCompany(CompanyCreateRequest request) {
+        log.info("Creating new company: {}", request.getName());
 
-        validateCompanyInput(company);
-
+        Company company = new Company();
+        company.setName(request.getName());
+        company.setBusinessType(request.getBusinessType());
+        company.setCurrency(request.getCurrency());
+        company.setTimezone(request.getTimezone());
+        company.setLanguage(request.getLanguage());
         company.setStatus(Company.CompanyStatus.ACTIVE);
         company.setCreatedAt(LocalDateTime.now());
         company.setUpdatedAt(LocalDateTime.now());
@@ -77,52 +81,54 @@ public class CompanyServiceImpl implements CompanyService {
         Company saved = companyRepository.save(company);
         log.info("Company created successfully with ID: {}", saved.getId());
 
-        return saved;
+        return CompanyResponse.fromEntity(saved);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Optional<Company> getCompanyById(Long companyId) {
+    public Optional<CompanyResponse> getCompanyById(Long companyId) {
         verifyCompanyAccess(companyId);
-        return companyRepository.findById(companyId);
+        return companyRepository.findById(companyId)
+                .map(CompanyResponse::fromEntity);
     }
 
     @Override
     @RequirePermission(Permission.CREATE_COMPANY)
     @Transactional(readOnly = true)
-    public Optional<Company> getCompanyByName(String name) {
-        return companyRepository.findByName(name);
+    public Optional<CompanyResponse> getCompanyByName(String name) {
+        return companyRepository.findByName(name)
+                .map(CompanyResponse::fromEntity);
     }
 
     @Override
     @RequirePermission(Permission.UPDATE_COMPANY)
-    public Company updateCompany(Long companyId, Company companyDetails) {
+    public CompanyResponse updateCompany(Long companyId, CompanyUpdateRequest request) {
         verifyCompanyAccess(companyId);
 
         Company existing = companyRepository.findById(companyId)
                 .orElseThrow(() -> new IllegalArgumentException("Company not found"));
 
-        // Update allowed fields
-        if (companyDetails.getName() != null && !companyDetails.getName().isEmpty()) {
-            existing.setName(companyDetails.getName());
+        // Update allowed fields from DTO
+        if (request.getName() != null && !request.getName().isEmpty()) {
+            existing.setName(request.getName());
         }
-        if (companyDetails.getBusinessType() != null) {
-            existing.setBusinessType(companyDetails.getBusinessType());
+        if (request.getBusinessType() != null) {
+            existing.setBusinessType(request.getBusinessType());
         }
-        if (companyDetails.getCurrency() != null) {
-            existing.setCurrency(companyDetails.getCurrency());
+        if (request.getCurrency() != null) {
+            existing.setCurrency(request.getCurrency());
         }
-        if (companyDetails.getTimezone() != null) {
-            existing.setTimezone(companyDetails.getTimezone());
+        if (request.getTimezone() != null) {
+            existing.setTimezone(request.getTimezone());
         }
-        if (companyDetails.getLanguage() != null) {
-            existing.setLanguage(companyDetails.getLanguage());
+        if (request.getLanguage() != null) {
+            existing.setLanguage(request.getLanguage());
         }
 
         existing.setUpdatedAt(LocalDateTime.now());
 
         log.info("Company updated: {}", companyId);
-        return companyRepository.save(existing);
+        return CompanyResponse.fromEntity(companyRepository.save(existing));
     }
 
     @Override
@@ -139,20 +145,25 @@ public class CompanyServiceImpl implements CompanyService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<Company> getAllCompanies(Pageable pageable) {
+    public Page<CompanyResponse> getAllCompanies(Pageable pageable) {
+        Page<Company> companies;
+
         if (SecurityUtils.hasRole(com.devcast.fleetmanagement.features.user.model.util.Role.OWNER)) {
-            return companyRepository.findAll(pageable);
+            companies = companyRepository.findAll(pageable);
         } else {
             // Non-owner users can only see their own company
             Long companyId = SecurityUtils.getCurrentCompanyId();
             Optional<Company> company = companyRepository.findById(companyId);
 
             if (company.isPresent()) {
-                return new PageImpl<>(List.of(company.get()), pageable, 1);
+                companies = new PageImpl<>(List.of(company.get()), pageable, 1);
+            } else {
+                companies = new PageImpl<>(List.of());
             }
-
-            return new PageImpl<>(List.of());
         }
+
+        // Convert to DTOs
+        return companies.map(CompanyResponse::fromEntity);
     }
 
     @Override
@@ -199,39 +210,41 @@ public class CompanyServiceImpl implements CompanyService {
 
     @Override
     @RequirePermission(Permission.MANAGE_COMPANY_SETTINGS)
-    public CompanySetting saveSetting(Long companyId, String key, String value, CompanySetting.DataType dataType) {
+    public CompanySettingResponse saveSetting(Long companyId, CompanySettingRequest request) {
         verifyCompanyAccess(companyId);
 
         Company company = companyRepository.findById(companyId)
                 .orElseThrow(() -> new IllegalArgumentException("Company not found"));
 
         // Check if setting already exists and update it
-        Optional<CompanySetting> existing = companySettingRepository.findByCompanyIdAndSettingKey(companyId, key);
+        Optional<CompanySetting> existing = companySettingRepository.findByCompanyIdAndSettingKey(companyId, request.getKey());
 
         CompanySetting setting;
         if (existing.isPresent()) {
             setting = existing.get();
-            setting.setSettingValue(value);
-            setting.setDataType(dataType);
-            log.info("Setting updated for company {}: {} = {}", companyId, key, value);
+            setting.setSettingValue(request.getValue());
+            setting.setDataType(request.getDataType());
+            setting.setDescription(request.getDescription());
+            log.info("Setting updated for company {}: {} = {}", companyId, request.getKey(), request.getValue());
         } else {
             setting = CompanySetting.builder()
                     .company(company)
-                    .settingKey(key)
-                    .settingValue(value)
-                    .dataType(dataType)
+                    .settingKey(request.getKey())
+                    .settingValue(request.getValue())
+                    .dataType(request.getDataType())
+                    .description(request.getDescription())
                     .build();
-            log.info("Setting created for company {}: {} = {}", companyId, key, value);
+            log.info("Setting created for company {}: {} = {}", companyId, request.getKey(), request.getValue());
         }
 
-        return companySettingRepository.save(setting);
+        return CompanySettingResponse.fromEntity(companySettingRepository.save(setting));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<CompanySetting> getCompanySettings(Long companyId) {
+    public List<CompanySettingResponse> getCompanySettings(Long companyId) {
         verifyCompanyAccess(companyId);
-        return companySettingRepository.findByCompanyId(companyId);
+        return CompanySettingResponse.fromEntities(companySettingRepository.findByCompanyId(companyId));
     }
 
     @Override
@@ -272,66 +285,77 @@ public class CompanyServiceImpl implements CompanyService {
 
     @Override
     @RequirePermission(Permission.MANAGE_PRICING_RULES)
-    public PricingRule createPricingRule(Long companyId, PricingRule rule) {
+    public PricingRuleResponse createPricingRule(Long companyId, PricingRuleRequest request) {
         verifyCompanyAccess(companyId);
 
         Company company = companyRepository.findById(companyId)
                 .orElseThrow(() -> new IllegalArgumentException("Company not found"));
 
-        rule.setCompany(company);
-        rule.setActive(true);
+        PricingRule rule = PricingRule.builder()
+                .company(company)
+                .appliesToType(request.getAppliesToType())
+                .pricingType(request.getPricingType())
+                .rate(request.getRate())
+                .overtimeRate(request.getOvertimeRate())
+                .currency(request.getCurrency())
+                .active(true)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
 
         log.info("Pricing rule created for company: {} - Type: {}", companyId, rule.getPricingType());
-        return pricingRuleRepository.save(rule);
+        return PricingRuleResponse.fromEntity(pricingRuleRepository.save(rule));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<PricingRule> getPricingRules(Long companyId) {
+    public List<PricingRuleResponse> getPricingRules(Long companyId) {
         verifyCompanyAccess(companyId);
-        return pricingRuleRepository.findByCompanyId(companyId);
+        return PricingRuleResponse.fromEntities(pricingRuleRepository.findByCompanyId(companyId));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<PricingRule> getActivePricingRules(Long companyId) {
+    public List<PricingRuleResponse> getActivePricingRules(Long companyId) {
         verifyCompanyAccess(companyId);
-        return pricingRuleRepository.findByCompanyIdAndActive(companyId, true);
+        return PricingRuleResponse.fromEntities(pricingRuleRepository.findByCompanyIdAndActive(companyId, true));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<PricingRule> getPricingRulesByType(Long companyId, PricingRule.PricingType type) {
+    public List<PricingRuleResponse> getPricingRulesByType(Long companyId, String pricingType) {
         verifyCompanyAccess(companyId);
-        return pricingRuleRepository.findByCompanyIdAndPricingType(companyId, type);
+        PricingRule.PricingType type = PricingRule.PricingType.valueOf(pricingType);
+        return PricingRuleResponse.fromEntities(pricingRuleRepository.findByCompanyIdAndPricingType(companyId, type));
     }
 
     @Override
     @RequirePermission(Permission.MANAGE_PRICING_RULES)
-    public PricingRule updatePricingRule(Long companyId, Long ruleId, PricingRule rule) {
+    public PricingRuleResponse updatePricingRule(Long companyId, Long ruleId, PricingRuleRequest request) {
         verifyCompanyAccess(companyId);
 
         PricingRule existing = pricingRuleRepository.findByIdAndCompanyId(ruleId, companyId)
                 .orElseThrow(() -> new IllegalArgumentException("Pricing rule not found or access denied"));
 
-        if (rule.getRate() != null) {
-            existing.setRate(rule.getRate());
+        if (request.getRate() != null) {
+            existing.setRate(request.getRate());
         }
-        if (rule.getOvertimeRate() != null) {
-            existing.setOvertimeRate(rule.getOvertimeRate());
+        if (request.getOvertimeRate() != null) {
+            existing.setOvertimeRate(request.getOvertimeRate());
         }
-        if (rule.getCurrency() != null) {
-            existing.setCurrency(rule.getCurrency());
+        if (request.getCurrency() != null) {
+            existing.setCurrency(request.getCurrency());
         }
-        if (rule.getPricingType() != null) {
-            existing.setPricingType(rule.getPricingType());
+        if (request.getPricingType() != null) {
+            existing.setPricingType(request.getPricingType());
         }
-        if (rule.getAppliesToType() != null) {
-            existing.setAppliesToType(rule.getAppliesToType());
+        if (request.getAppliesToType() != null) {
+            existing.setAppliesToType(request.getAppliesToType());
         }
 
+        existing.setUpdatedAt(LocalDateTime.now());
         log.info("Pricing rule updated: {} for company: {}", ruleId, companyId);
-        return pricingRuleRepository.save(existing);
+        return PricingRuleResponse.fromEntity(pricingRuleRepository.save(existing));
     }
 
     @Override
@@ -376,65 +400,73 @@ public class CompanyServiceImpl implements CompanyService {
 
     @Override
     @RequirePermission(Permission.CREATE_CLIENT)
-    public Client createClient(Long companyId, Client client) {
+    public ClientResponse createClient(Long companyId, ClientRequest request) {
         verifyCompanyAccess(companyId);
 
         Company company = companyRepository.findById(companyId)
                 .orElseThrow(() -> new IllegalArgumentException("Company not found"));
 
-        client.setCompany(company);
+        Client client = Client.builder()
+                .company(company)
+                .name(request.getName())
+                .phone(request.getPhone())
+                .email(request.getEmail())
+                .address(request.getAddress())
+                .createdAt(LocalDateTime.now())
+                .build();
 
         log.info("Client created for company: {} - Name: {}", companyId, client.getName());
-        return clientRepository.save(client);
+        return ClientResponse.fromEntity(clientRepository.save(client));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Optional<Client> getClientById(Long companyId, Long clientId) {
+    public Optional<ClientResponse> getClientById(Long companyId, Long clientId) {
         verifyCompanyAccess(companyId);
 
         return clientRepository.findById(clientId)
-                .filter(client -> client.getCompany().getId().equals(companyId));
+                .filter(client -> client.getCompany().getId().equals(companyId))
+                .map(ClientResponse::fromEntity);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<Client> getCompanyClients(Long companyId) {
+    public List<ClientResponse> getCompanyClients(Long companyId) {
         verifyCompanyAccess(companyId);
-        return clientRepository.findByCompanyId(companyId);
+        return ClientResponse.fromEntities(clientRepository.findByCompanyId(companyId));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<Client> searchClients(Long companyId, String searchTerm) {
+    public List<ClientResponse> searchClients(Long companyId, String searchTerm) {
         verifyCompanyAccess(companyId);
-        return clientRepository.findByCompanyIdAndNameContainingIgnoreCase(companyId, searchTerm);
+        return ClientResponse.fromEntities(clientRepository.findByCompanyIdAndNameContainingIgnoreCase(companyId, searchTerm));
     }
 
     @Override
     @RequirePermission(Permission.UPDATE_CLIENT)
-    public Client updateClient(Long companyId, Long clientId, Client clientDetails) {
+    public ClientResponse updateClient(Long companyId, Long clientId, ClientRequest request) {
         verifyCompanyAccess(companyId);
 
         Client existing = clientRepository.findById(clientId)
                 .filter(client -> client.getCompany().getId().equals(companyId))
                 .orElseThrow(() -> new IllegalArgumentException("Client not found or access denied"));
 
-        if (clientDetails.getName() != null) {
-            existing.setName(clientDetails.getName());
+        if (request.getName() != null) {
+            existing.setName(request.getName());
         }
-        if (clientDetails.getEmail() != null) {
-            existing.setEmail(clientDetails.getEmail());
+        if (request.getEmail() != null) {
+            existing.setEmail(request.getEmail());
         }
-        if (clientDetails.getPhone() != null) {
-            existing.setPhone(clientDetails.getPhone());
+        if (request.getPhone() != null) {
+            existing.setPhone(request.getPhone());
         }
-        if (clientDetails.getAddress() != null) {
-            existing.setAddress(clientDetails.getAddress());
+        if (request.getAddress() != null) {
+            existing.setAddress(request.getAddress());
         }
 
         log.info("Client updated: {} for company: {}", clientId, companyId);
-        return clientRepository.save(existing);
+        return ClientResponse.fromEntity(clientRepository.save(existing));
     }
 
     @Override
@@ -540,6 +572,58 @@ public class CompanyServiceImpl implements CompanyService {
     public long getActiveRentalCount(Long companyId) {
         // Count active rental contracts (ACTIVE status)
         return rentalContractRepository.countByCompanyIdAndStatus(companyId, RentalContract.ContractStatus.ACTIVE);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, Boolean> getCompanyFeatures(Long companyId) {
+        verifyCompanyAccess(companyId);
+
+        // Get subscription info to determine available features
+        Optional<CompanySubscription> subscription = companySubscriptionRepository.findByCompanyId(companyId);
+
+        Map<String, Boolean> features = new HashMap<>();
+
+        if (subscription.isPresent() && subscription.get().isValid()) {
+            // Features based on subscription plan
+            String plan = String.valueOf(subscription.get().getPlan());
+
+            // All subscriptions get basic features
+            features.put("BASIC_COMPANY_MANAGEMENT", true);
+            features.put("VEHICLE_TRACKING", true);
+            features.put("DRIVER_MANAGEMENT", true);
+
+            // Premium features based on plan
+            if ("PROFESSIONAL".equals(plan) || "ENTERPRISE".equals(plan)) {
+                features.put("ADVANCED_ANALYTICS", true);
+                features.put("CUSTOM_REPORTS", true);
+            } else {
+                features.put("ADVANCED_ANALYTICS", false);
+                features.put("CUSTOM_REPORTS", false);
+            }
+
+            if ("ENTERPRISE".equals(plan)) {
+                features.put("API_ACCESS", true);
+                features.put("DEDICATED_SUPPORT", true);
+                features.put("CUSTOM_INTEGRATIONS", true);
+            } else {
+                features.put("API_ACCESS", false);
+                features.put("DEDICATED_SUPPORT", false);
+                features.put("CUSTOM_INTEGRATIONS", false);
+            }
+        } else {
+            // No valid subscription - all premium features disabled
+            features.put("BASIC_COMPANY_MANAGEMENT", false);
+            features.put("VEHICLE_TRACKING", false);
+            features.put("DRIVER_MANAGEMENT", false);
+            features.put("ADVANCED_ANALYTICS", false);
+            features.put("CUSTOM_REPORTS", false);
+            features.put("API_ACCESS", false);
+            features.put("DEDICATED_SUPPORT", false);
+            features.put("CUSTOM_INTEGRATIONS", false);
+        }
+
+        return features;
     }
 
     // ==================== Subscription Management ====================
@@ -706,7 +790,7 @@ public class CompanyServiceImpl implements CompanyService {
      * @param companyId The company ID
      * @return Map of feature names to boolean availability
      */
-    @Override
+  /*  @Override
     public java.util.Map<String, Boolean> getCompanyFeatures(Long companyId) {
         Company company = companyRepository.findById(companyId)
                 .orElseThrow(() -> new IllegalArgumentException("Company not found"));
@@ -752,7 +836,7 @@ public class CompanyServiceImpl implements CompanyService {
         }
 
         return features;
-    }
+    }*/
 
     /**
      * Validate company input data

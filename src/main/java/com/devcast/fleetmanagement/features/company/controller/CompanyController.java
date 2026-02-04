@@ -1,13 +1,7 @@
 package com.devcast.fleetmanagement.features.company.controller;
 
 import com.devcast.fleetmanagement.features.auth.dto.ApiResponse;
-import com.devcast.fleetmanagement.features.company.dto.CompanyStatistics;
-import com.devcast.fleetmanagement.features.company.dto.CompanySubscriptionInfo;
-import com.devcast.fleetmanagement.features.company.dto.RevenueMetrics;
-import com.devcast.fleetmanagement.features.company.model.Client;
-import com.devcast.fleetmanagement.features.company.model.Company;
-import com.devcast.fleetmanagement.features.company.model.CompanySetting;
-import com.devcast.fleetmanagement.features.company.model.PricingRule;
+import com.devcast.fleetmanagement.features.company.dto.*;;
 import com.devcast.fleetmanagement.features.company.service.CompanyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -43,6 +37,9 @@ public class CompanyController {
     /**
      * Create a new company
      * POST /api/companies
+     *
+     * Request Body: CompanyCreateRequest (no id, timestamps, or status)
+     * Response: CompanyResponse (complete company information)
      */
     @PostMapping
     @Operation(summary = "Create company", description = "Create a new company (OWNER only)")
@@ -51,12 +48,12 @@ public class CompanyController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid input"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
     })
-    public ResponseEntity<ApiResponse<Company>> createCompany(
-            @Valid @RequestBody Company company
+    public ResponseEntity<ApiResponse<CompanyResponse>> createCompany(
+            @Valid @RequestBody CompanyCreateRequest request
     ) {
         try {
-            log.info("Creating company: {}", company.getName());
-            Company created = companyService.createCompany(company);
+            log.info("Creating company: {}", request.getName());
+            CompanyResponse created = companyService.createCompany(request);
             return ResponseEntity.status(HttpStatus.CREATED)
                     .body(ApiResponse.success(created, "Company created successfully"));
         } catch (Exception e) {
@@ -69,6 +66,8 @@ public class CompanyController {
     /**
      * Get company by ID
      * GET /api/companies/{companyId}
+     *
+     * Response: CompanyResponse (complete company information)
      */
     @GetMapping("/{companyId}")
     @Operation(summary = "Get company", description = "Get company details by ID")
@@ -77,7 +76,7 @@ public class CompanyController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Company not found"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
     })
-    public ResponseEntity<ApiResponse<Company>> getCompany(
+    public ResponseEntity<ApiResponse<CompanyResponse>> getCompany(
             @PathVariable Long companyId
     ) {
         try {
@@ -94,14 +93,16 @@ public class CompanyController {
     /**
      * Get all companies with pagination
      * GET /api/companies
+     *
+     * Response: Page<CompanyResponse> (paginated company list)
      */
     @GetMapping
     @Operation(summary = "List companies", description = "Get paginated list of companies")
-    public ResponseEntity<ApiResponse<Page<Company>>> listCompanies(
+    public ResponseEntity<ApiResponse<Page<CompanyResponse>>> listCompanies(
             Pageable pageable
     ) {
         try {
-            Page<Company> companies = companyService.getAllCompanies(pageable);
+            Page<CompanyResponse> companies = companyService.getAllCompanies(pageable);
             return ResponseEntity.ok(ApiResponse.success(companies, "Companies retrieved successfully"));
         } catch (Exception e) {
             log.error("Error retrieving companies", e);
@@ -113,6 +114,9 @@ public class CompanyController {
     /**
      * Update company
      * PUT /api/companies/{companyId}
+     *
+     * Request Body: CompanyUpdateRequest (all fields optional, no id/timestamps)
+     * Response: CompanyResponse (complete updated company information)
      */
     @PutMapping("/{companyId}")
     @Operation(summary = "Update company", description = "Update company details")
@@ -121,13 +125,13 @@ public class CompanyController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Company not found"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Insufficient permissions")
     })
-    public ResponseEntity<ApiResponse<Company>> updateCompany(
+    public ResponseEntity<ApiResponse<CompanyResponse>> updateCompany(
             @PathVariable Long companyId,
-            @Valid @RequestBody Company companyDetails
+            @Valid @RequestBody CompanyUpdateRequest request
     ) {
         try {
             log.info("Updating company: {}", companyId);
-            Company updated = companyService.updateCompany(companyId, companyDetails);
+            CompanyResponse updated = companyService.updateCompany(companyId, request);
             return ResponseEntity.ok(ApiResponse.success(updated, "Company updated successfully"));
         } catch (Exception e) {
             log.error("Error updating company {}", companyId, e);
@@ -207,14 +211,16 @@ public class CompanyController {
     /**
      * Get all settings for company
      * GET /api/companies/{companyId}/settings
+     *
+     * Response: List<CompanySettingResponse> (all company settings)
      */
     @GetMapping("/{companyId}/settings")
     @Operation(summary = "Get company settings", description = "Retrieve all company configuration settings")
-    public ResponseEntity<ApiResponse<List<CompanySetting>>> getSettings(
+    public ResponseEntity<ApiResponse<List<CompanySettingResponse>>> getSettings(
             @PathVariable Long companyId
     ) {
         try {
-            List<CompanySetting> settings = companyService.getCompanySettings(companyId);
+            List<CompanySettingResponse> settings = companyService.getCompanySettings(companyId);
             return ResponseEntity.ok(ApiResponse.success(settings, "Settings retrieved successfully"));
         } catch (Exception e) {
             log.error("Error retrieving company settings {}", companyId, e);
@@ -226,23 +232,19 @@ public class CompanyController {
     /**
      * Save or update setting
      * POST /api/companies/{companyId}/settings
+     *
+     * Request Body: CompanySettingRequest (setting configuration)
+     * Response: CompanySettingResponse (saved setting details)
      */
     @PostMapping("/{companyId}/settings")
     @Operation(summary = "Save setting", description = "Save or update a company configuration setting")
-    public ResponseEntity<ApiResponse<CompanySetting>> saveSetting(
+    public ResponseEntity<ApiResponse<CompanySettingResponse>> saveSetting(
             @PathVariable Long companyId,
-            @RequestParam String key,
-            @RequestParam String value,
-            @RequestParam(defaultValue = "STRING") String dataType
+            @Valid @RequestBody CompanySettingRequest request
     ) {
         try {
-            log.info("Saving setting for company {}: {}", companyId, key);
-            CompanySetting setting = companyService.saveSetting(
-                    companyId,
-                    key,
-                    value,
-                    CompanySetting.DataType.valueOf(dataType)
-            );
+            log.info("Saving setting for company {}: {}", companyId, request.getKey());
+            CompanySettingResponse setting = companyService.saveSetting(companyId, request);
             return ResponseEntity.ok(ApiResponse.success(setting, "Setting saved successfully"));
         } catch (Exception e) {
             log.error("Error saving setting for company {}", companyId, e);
@@ -299,14 +301,16 @@ public class CompanyController {
     /**
      * Get all pricing rules
      * GET /api/companies/{companyId}/pricing-rules
+     *
+     * Response: List<PricingRuleResponse> (all pricing rules)
      */
     @GetMapping("/{companyId}/pricing-rules")
     @Operation(summary = "List pricing rules", description = "Get all pricing rules for company")
-    public ResponseEntity<ApiResponse<List<PricingRule>>> getPricingRules(
+    public ResponseEntity<ApiResponse<List<PricingRuleResponse>>> getPricingRules(
             @PathVariable Long companyId
     ) {
         try {
-            List<PricingRule> rules = companyService.getPricingRules(companyId);
+            List<PricingRuleResponse> rules = companyService.getPricingRules(companyId);
             return ResponseEntity.ok(ApiResponse.success(rules, "Pricing rules retrieved successfully"));
         } catch (Exception e) {
             log.error("Error retrieving pricing rules for company {}", companyId, e);
@@ -318,14 +322,16 @@ public class CompanyController {
     /**
      * Get active pricing rules
      * GET /api/companies/{companyId}/pricing-rules/active
+     *
+     * Response: List<PricingRuleResponse> (active pricing rules only)
      */
     @GetMapping("/{companyId}/pricing-rules/active")
     @Operation(summary = "List active pricing rules", description = "Get active pricing rules for company")
-    public ResponseEntity<ApiResponse<List<PricingRule>>> getActivePricingRules(
+    public ResponseEntity<ApiResponse<List<PricingRuleResponse>>> getActivePricingRules(
             @PathVariable Long companyId
     ) {
         try {
-            List<PricingRule> rules = companyService.getActivePricingRules(companyId);
+            List<PricingRuleResponse> rules = companyService.getActivePricingRules(companyId);
             return ResponseEntity.ok(ApiResponse.success(rules, "Active pricing rules retrieved successfully"));
         } catch (Exception e) {
             log.error("Error retrieving active pricing rules for company {}", companyId, e);
@@ -337,16 +343,19 @@ public class CompanyController {
     /**
      * Create pricing rule
      * POST /api/companies/{companyId}/pricing-rules
+     *
+     * Request Body: PricingRuleRequest (no id/timestamps, active defaults to true)
+     * Response: PricingRuleResponse (created rule details)
      */
     @PostMapping("/{companyId}/pricing-rules")
     @Operation(summary = "Create pricing rule", description = "Create new pricing rule for company")
-    public ResponseEntity<ApiResponse<PricingRule>> createPricingRule(
+    public ResponseEntity<ApiResponse<PricingRuleResponse>> createPricingRule(
             @PathVariable Long companyId,
-            @Valid @RequestBody PricingRule rule
+            @Valid @RequestBody PricingRuleRequest request
     ) {
         try {
             log.info("Creating pricing rule for company {}", companyId);
-            PricingRule created = companyService.createPricingRule(companyId, rule);
+            PricingRuleResponse created = companyService.createPricingRule(companyId, request);
             return ResponseEntity.status(HttpStatus.CREATED)
                     .body(ApiResponse.success(created, "Pricing rule created successfully"));
         } catch (Exception e) {
@@ -359,17 +368,20 @@ public class CompanyController {
     /**
      * Update pricing rule
      * PUT /api/companies/{companyId}/pricing-rules/{ruleId}
+     *
+     * Request Body: PricingRuleRequest (no id/timestamps)
+     * Response: PricingRuleResponse (updated rule details)
      */
     @PutMapping("/{companyId}/pricing-rules/{ruleId}")
     @Operation(summary = "Update pricing rule", description = "Update existing pricing rule")
-    public ResponseEntity<ApiResponse<PricingRule>> updatePricingRule(
+    public ResponseEntity<ApiResponse<PricingRuleResponse>> updatePricingRule(
             @PathVariable Long companyId,
             @PathVariable Long ruleId,
-            @Valid @RequestBody PricingRule rule
+            @Valid @RequestBody PricingRuleRequest request
     ) {
         try {
             log.info("Updating pricing rule {} for company {}", ruleId, companyId);
-            PricingRule updated = companyService.updatePricingRule(companyId, ruleId, rule);
+            PricingRuleResponse updated = companyService.updatePricingRule(companyId, ruleId, request);
             return ResponseEntity.ok(ApiResponse.success(updated, "Pricing rule updated successfully"));
         } catch (Exception e) {
             log.error("Error updating pricing rule {} for company {}", ruleId, companyId, e);
@@ -506,14 +518,16 @@ public class CompanyController {
     /**
      * Get all clients for company
      * GET /api/companies/{companyId}/clients
+     *
+     * Response: List<ClientResponse> (all company clients)
      */
     @GetMapping("/{companyId}/clients")
     @Operation(summary = "List clients", description = "Get all clients for company")
-    public ResponseEntity<ApiResponse<List<Client>>> getClients(
+    public ResponseEntity<ApiResponse<List<ClientResponse>>> getClients(
             @PathVariable Long companyId
     ) {
         try {
-            List<Client> clients = companyService.getCompanyClients(companyId);
+            List<ClientResponse> clients = companyService.getCompanyClients(companyId);
             return ResponseEntity.ok(ApiResponse.success(clients, "Clients retrieved successfully"));
         } catch (Exception e) {
             log.error("Error retrieving clients for company {}", companyId, e);
@@ -525,15 +539,17 @@ public class CompanyController {
     /**
      * Search clients
      * GET /api/companies/{companyId}/clients/search
+     *
+     * Response: List<ClientResponse> (matching clients)
      */
     @GetMapping("/{companyId}/clients/search")
-    @Operation(summary = "Search clients", description = "Search clients by name")
-    public ResponseEntity<ApiResponse<List<Client>>> searchClients(
+    @Operation(summary = "Search clients", description = "Search clients by name or email")
+    public ResponseEntity<ApiResponse<List<ClientResponse>>> searchClients(
             @PathVariable Long companyId,
             @RequestParam String query
     ) {
         try {
-            List<Client> clients = companyService.searchClients(companyId, query);
+            List<ClientResponse> clients = companyService.searchClients(companyId, query);
             return ResponseEntity.ok(ApiResponse.success(clients, "Clients found successfully"));
         } catch (Exception e) {
             log.error("Error searching clients for company {}", companyId, e);
@@ -545,16 +561,19 @@ public class CompanyController {
     /**
      * Create client
      * POST /api/companies/{companyId}/clients
+     *
+     * Request Body: ClientRequest (no id, timestamps, or companyId)
+     * Response: ClientResponse (created client details)
      */
     @PostMapping("/{companyId}/clients")
     @Operation(summary = "Create client", description = "Create new client for company")
-    public ResponseEntity<ApiResponse<Client>> createClient(
+    public ResponseEntity<ApiResponse<ClientResponse>> createClient(
             @PathVariable Long companyId,
-            @Valid @RequestBody Client client
+            @Valid @RequestBody ClientRequest request
     ) {
         try {
             log.info("Creating client for company {}", companyId);
-            Client created = companyService.createClient(companyId, client);
+            ClientResponse created = companyService.createClient(companyId, request);
             return ResponseEntity.status(HttpStatus.CREATED)
                     .body(ApiResponse.success(created, "Client created successfully"));
         } catch (Exception e) {
@@ -567,10 +586,12 @@ public class CompanyController {
     /**
      * Get client by ID
      * GET /api/companies/{companyId}/clients/{clientId}
+     *
+     * Response: ClientResponse (complete client details)
      */
     @GetMapping("/{companyId}/clients/{clientId}")
     @Operation(summary = "Get client", description = "Get client details by ID")
-    public ResponseEntity<ApiResponse<Client>> getClient(
+    public ResponseEntity<ApiResponse<ClientResponse>> getClient(
             @PathVariable Long companyId,
             @PathVariable Long clientId
     ) {
@@ -588,17 +609,20 @@ public class CompanyController {
     /**
      * Update client
      * PUT /api/companies/{companyId}/clients/{clientId}
+     *
+     * Request Body: ClientRequest (all fields optional)
+     * Response: ClientResponse (updated client details)
      */
     @PutMapping("/{companyId}/clients/{clientId}")
     @Operation(summary = "Update client", description = "Update client details")
-    public ResponseEntity<ApiResponse<Client>> updateClient(
+    public ResponseEntity<ApiResponse<ClientResponse>> updateClient(
             @PathVariable Long companyId,
             @PathVariable Long clientId,
-            @Valid @RequestBody Client clientDetails
+            @Valid @RequestBody ClientRequest request
     ) {
         try {
             log.info("Updating client {} for company {}", clientId, companyId);
-            Client updated = companyService.updateClient(companyId, clientId, clientDetails);
+            ClientResponse updated = companyService.updateClient(companyId, clientId, request);
             return ResponseEntity.ok(ApiResponse.success(updated, "Client updated successfully"));
         } catch (Exception e) {
             log.error("Error updating client {} for company {}", clientId, companyId, e);
