@@ -3,6 +3,7 @@ package com.devcast.fleetmanagement.features.vehicle.service;
 
 import com.devcast.fleetmanagement.features.fuel.model.FuelLog;
 import com.devcast.fleetmanagement.features.maintenance.model.MaintenanceRecord;
+import com.devcast.fleetmanagement.features.vehicle.dto.*;
 import com.devcast.fleetmanagement.features.vehicle.model.GpsLog;
 import com.devcast.fleetmanagement.features.vehicle.model.Vehicle;
 import com.devcast.fleetmanagement.features.vehicle.model.VehicleTimeLog;
@@ -270,94 +271,4 @@ public interface VehicleService {
      */
     List<VehicleComparison> getFleetComparison(Long companyId);
 
-    // Data Transfer Objects
-
-    record VehicleUsageStats(
-            Long vehicleId,
-            Long totalUsageHours,
-            Long totalKilometers,
-            Integer tripCount,
-            BigDecimal averageTripDistance
-    ) {}
-
-    record VehicleRoute(
-            Long vehicleId,
-            List<GpsPoint> points,
-            Double totalDistance,
-            Long totalDuration
-    ) {
-        public record GpsPoint(Double latitude, Double longitude, Long timestamp) {}
-    }
-
-    record VehicleTrackingInfo(
-            Long vehicleId,
-            String registrationNumber,
-            Double latitude,
-            Double longitude,
-            String status,
-            Long lastUpdate,
-            BigDecimal fuelLevel,
-            Long odometer
-    ) {}
-
-    record FuelConsumptionAnalysis(
-            BigDecimal totalFuelConsumed,
-            Long totalDistance,
-            BigDecimal avgConsumption,
-            BigDecimal totalCost,
-            String trend
-    ) {}
-
-    record FuelAnomaly(
-            Long vehicleId,
-            Long logId,
-            String anomalyType,
-            BigDecimal variance,
-            String recommendation
-    ) {}
-
-    record MaintenanceSchedule(
-            Long vehicleId,
-            String serviceType,
-            Long dueMileage,
-            Long dueDate,
-            String status
-    ) {}
-
-    record VehiclePerformanceReport(
-            Long vehicleId,
-            BigDecimal efficiency,
-            BigDecimal reliability,
-            BigDecimal utilization,
-            BigDecimal profitability,
-            String overallRating
-    ) {}
-
-    record FleetHealthStatus(
-            Long companyId,
-            Integer totalVehicles,
-            Integer activeVehicles,
-            Integer maintenanceVehicles,
-            Double avgFuelConsumption,
-            BigDecimal avgMaintenanceCost,
-            String healthRating
-    ) {}
-
-    record VehicleProfitability(
-            Long vehicleId,
-            BigDecimal totalRevenue,
-            BigDecimal totalCost,
-            BigDecimal netProfit,
-            Double profitMargin
-    ) {}
-
-    record VehicleComparison(
-            Long vehicleId,
-            String registrationNumber,
-            BigDecimal revenue,
-            BigDecimal cost,
-            BigDecimal profit,
-            Double profitMargin,
-            Long usageHours
-    ) {}
 }

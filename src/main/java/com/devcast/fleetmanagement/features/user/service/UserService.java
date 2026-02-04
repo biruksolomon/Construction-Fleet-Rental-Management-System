@@ -1,5 +1,6 @@
 package com.devcast.fleetmanagement.features.user.service;
 
+import com.devcast.fleetmanagement.features.user.dto.*;
 import com.devcast.fleetmanagement.features.user.model.User;
 import com.devcast.fleetmanagement.features.user.model.util.Role;
 import org.springframework.data.domain.Page;
@@ -201,28 +202,7 @@ public interface UserService {
 
     // Data Transfer Objects
 
-    record UserPermissions(
-            Long userId,
-            String userName,
-            Role role,
-            List<String> permissions,
-            List<String> modules
-    ) {}
 
-    record UserActivity(
-            Long userId,
-            String userName,
-            String email,
-            Long lastLogin,
-            Long loginCount,
-            String status
-    ) {}
 
-    record UserFilterCriteria(
-            Role role,
-            String status,
-            String department,
-            Long fromDate,
-            Long toDate
-    ) {}
+
 }
