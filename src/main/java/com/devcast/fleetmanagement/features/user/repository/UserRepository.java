@@ -48,4 +48,22 @@ public interface UserRepository extends JpaRepository<User, Long> {
     // Email exists check
     @Query("select case when count(u) > 0 then true else false end from User u where lower(u.email) = lower(:email) and u.company.id = :companyId")
     boolean existsByEmailAndCompanyId(@Param("email") String email, @Param("companyId") Long companyId);
+
+    // Email and Company check (for updates)
+    @Query("select case when count(u) > 0 then true else false end from User u where lower(u.email) = lower(:email) and u.company.id = :companyId and u.id != :userId")
+    boolean existsByCompanyIdAndEmailAndIdNot(@Param("companyId") Long companyId, @Param("email") String email, @Param("userId") Long userId);
+
+    // Find by company and email
+    @Query("select u from User u where u.company.id = :companyId and lower(u.email) = lower(:email)")
+    Optional<User> findByCompanyIdAndEmail(@Param("companyId") Long companyId, @Param("email") String email);
+
+    // Search by company, name or email
+    @Query("select u from User u where u.company.id = :companyId and (lower(u.fullName) like lower(concat('%', :searchTerm, '%')) or lower(u.email) like lower(concat('%', :searchTerm, '%')))")
+    List<User> searchByCompanyIdAndNameOrEmail(@Param("companyId") Long companyId, @Param("searchTerm") String searchTerm);
+
+    // Complex filter query
+    @Query("select u from User u where u.company.id = :companyId " +
+            "and (:role is null or u.role = :role) " +
+            "and (:status is null or u.status = cast(:status as java.lang.String))")
+    List<User> filterByRoleAndStatus(@Param("companyId") Long companyId, @Param("role") Role role, @Param("status") String status);
 }

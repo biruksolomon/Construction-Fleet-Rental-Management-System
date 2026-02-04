@@ -138,6 +138,13 @@ public class SecurityUtils {
     }
 
     /**
+     * Verify user has access to specific company (alias for canAccessCompany)
+     */
+    public static boolean hasCompanyAccess(Long companyId) {
+        return canAccessCompany(companyId);
+    }
+
+    /**
      * Check if user is authenticated
      */
     public static boolean isAuthenticated() {
