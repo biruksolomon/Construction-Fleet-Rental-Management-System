@@ -270,5 +270,4 @@ public interface VehicleService {
      * Get fleet comparison
      */
     List<VehicleComparison> getFleetComparison(Long companyId);
-
 }
