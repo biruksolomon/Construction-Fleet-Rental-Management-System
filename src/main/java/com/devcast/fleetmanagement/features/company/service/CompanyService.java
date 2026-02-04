@@ -252,4 +252,11 @@ public interface CompanyService {
      * RBAC: Multi-tenant check
      */
     long getActiveRentalCount(Long companyId);
+
+    /**
+     * Get company features availability map
+     * RBAC: Multi-tenant check
+     * Returns which features are enabled for the company based on subscription
+     */
+    java.util.Map<String, Boolean> getCompanyFeatures(Long companyId);
 }

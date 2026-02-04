@@ -700,6 +700,61 @@ public class CompanyServiceImpl implements CompanyService {
     }
 
     /**
+     * Get company features availability map
+     * Determines which features are available based on company subscription status and enabled flags
+     *
+     * @param companyId The company ID
+     * @return Map of feature names to boolean availability
+     */
+    @Override
+    public java.util.Map<String, Boolean> getCompanyFeatures(Long companyId) {
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new IllegalArgumentException("Company not found"));
+
+        java.util.Map<String, Boolean> features = new java.util.HashMap<>();
+
+        // Core features always available
+        features.put("vehicleManagement", true);
+        features.put("driverManagement", true);
+        features.put("clients", true);
+        features.put("companySettings", true); // Admin can always access settings
+        features.put("userManagement", true); // Admin can always manage users
+
+        // Check subscription for premium features
+        Optional<CompanySubscription> subscriptionOpt = companySubscriptionRepository.findByCompanyId(companyId);
+
+        if (subscriptionOpt.isPresent()) {
+            CompanySubscription subscription = subscriptionOpt.get();
+            boolean subscriptionValid = subscription.isValid(); // Check if subscription is active and not expired
+
+            // Premium features available only if subscription is valid
+            // Use explicit feature flags from subscription model
+            features.put("gpsTracking", subscriptionValid && subscription.getGpsTrackingEnabled());
+            features.put("fuelTracking", subscriptionValid && subscription.getFuelTrackingEnabled());
+            features.put("maintenance", subscriptionValid && subscription.getMaintenanceTrackingEnabled());
+            features.put("mobileApp", subscriptionValid && subscription.getMobileAppEnabled());
+            features.put("payroll", subscriptionValid && subscription.getPayrollIntegrationEnabled());
+
+            // Features available based on subscription plan tier
+            features.put("invoicing", subscriptionValid); // All paid subscriptions get invoicing
+            features.put("rentalContracts", subscriptionValid); // All paid subscriptions get rental management
+            features.put("auditLogs", subscriptionValid); // Compliance feature for paid subscriptions
+        } else {
+            // No subscription - limited to core features only
+            features.put("gpsTracking", false);
+            features.put("fuelTracking", false);
+            features.put("maintenance", false);
+            features.put("invoicing", false);
+            features.put("payroll", false);
+            features.put("rentalContracts", false);
+            features.put("auditLogs", false);
+            features.put("mobileApp", false);
+        }
+
+        return features;
+    }
+
+    /**
      * Validate company input data
      */
     private void validateCompanyInput(Company company) {

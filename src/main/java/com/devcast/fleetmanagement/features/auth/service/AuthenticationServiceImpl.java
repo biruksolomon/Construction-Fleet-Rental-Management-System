@@ -8,7 +8,9 @@ import com.devcast.fleetmanagement.features.auth.repository.PasswordResetCodeRep
 import com.devcast.fleetmanagement.features.company.model.Company;
 import com.devcast.fleetmanagement.features.company.repository.CompanyRepository;
 import com.devcast.fleetmanagement.features.user.model.User;
+import com.devcast.fleetmanagement.features.user.model.util.Permission;
 import com.devcast.fleetmanagement.features.user.model.util.Role;
+import com.devcast.fleetmanagement.features.user.model.util.RolePermissionMap;
 import com.devcast.fleetmanagement.features.user.repository.UserRepository;
 import com.devcast.fleetmanagement.security.jwt.JwtAuthenticationException;
 import com.devcast.fleetmanagement.security.jwt.JwtTokenProvider;
@@ -21,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -81,12 +84,13 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             throw new JwtAuthenticationException("Invalid email or password");
         }
 
-        // Generate tokens
+        // Generate tokens with permissions
         String accessToken = jwtTokenProvider.generateAccessToken(
                 user.getId(),
                 company.getId(),
                 user.getEmail(),
-                user.getRole().getAuthority()
+                user.getRole().getAuthority(),
+                getPermissionsForRole(user.getRole())
         );
 
         String refreshToken = jwtTokenProvider.generateRefreshToken(
@@ -166,12 +170,13 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             throw new JwtAuthenticationException("Company account is suspended");
         }
 
-        // Generate new access token
+        // Generate new access token with permissions
         String newAccessToken = jwtTokenProvider.generateAccessToken(
                 user.getId(),
                 company.getId(),
                 user.getEmail(),
-                user.getRole().getAuthority()
+                user.getRole().getAuthority(),
+                getPermissionsForRole(user.getRole())
         );
 
         // Refresh token stays the same
@@ -565,5 +570,35 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .findByEmailAndCode(email, code)
                 .map(PasswordResetCode::isValid)
                 .orElse(false);
+    }
+
+    /**
+     * Get user permissions based on role
+     * Maps role to list of permission codes using RolePermissionMap
+     */
+    @Override
+    public java.util.List<String> getUserPermissions(long userId) {
+        Optional<User> userOpt = userRepository.findById(userId);
+        if (userOpt.isEmpty()) {
+            return java.util.List.of();
+        }
+
+        User user = userOpt.get();
+        return getPermissionsForRole(user.getRole());
+    }
+
+    /**
+     * Helper method: Get permission codes for a role
+     * Uses RolePermissionMap to resolve permissions
+     *
+     * @param role The user's role
+     * @return List of permission codes
+     */
+    private java.util.List<String> getPermissionsForRole(Role role) {
+        Set<Permission> permissions = RolePermissionMap.getPermissionsForRole(role);
+        return permissions.stream()
+                .map(Permission::getCode)
+                .sorted()
+                .collect(java.util.stream.Collectors.toList());
     }
 }

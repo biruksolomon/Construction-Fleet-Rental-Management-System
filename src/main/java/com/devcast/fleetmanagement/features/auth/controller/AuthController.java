@@ -2,6 +2,7 @@ package com.devcast.fleetmanagement.features.auth.controller;
 
 import com.devcast.fleetmanagement.features.auth.dto.*;
 import com.devcast.fleetmanagement.features.auth.service.AuthenticationService;
+import com.devcast.fleetmanagement.features.auth.service.AuthContextService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -33,6 +34,7 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthenticationService authenticationService;
+    private final AuthContextService authContextService;
 
     /**
      * Login endpoint
@@ -417,5 +419,51 @@ public class AuthController {
         return ResponseEntity.ok(
                 ApiResponse.success(isValid, isValid ? "Token is valid" : "Token is invalid or expired")
         );
+    }
+
+    /**
+     * Get complete auth context endpoint - SINGLE SOURCE OF TRUTH FOR FRONTEND
+     * GET /api/auth/context
+     *
+     * This is the primary endpoint for frontend to initialize auth state.
+     * Frontend calls this after login to get user info, company context, permissions, and features.
+     *
+     * Requires: Valid JWT token in Authorization header
+     * Response: AuthContextResponse with complete user, company, roles, permissions, and features
+     *
+     * Frontend uses this response to:
+     * - Initialize user profile
+     * - Display company information
+     * - Determine available features and UI access control
+     * - Setup navigation based on permissions
+     */
+    @GetMapping("/context")
+    @Operation(summary = "Get complete auth context (FRONTEND INIT)", description = "Single source of truth for auth state - returns user, company, roles, permissions, and features")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Auth context retrieved"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
+    })
+    public ResponseEntity<ApiResponse<AuthContextResponse>> getAuthContext(
+            @RequestHeader(value = "Authorization", required = false) String bearerToken
+    ) {
+        try {
+            // Extract JWT token from Authorization header
+            if (bearerToken == null || !bearerToken.startsWith("Bearer ")) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(ApiResponse.error("Missing or invalid Authorization header"));
+            }
+
+            String token = bearerToken.substring(7);
+
+            // Build complete auth context from JWT
+            AuthContextResponse authContext = authContextService.buildAuthContext(token);
+
+            return ResponseEntity.ok(
+                    ApiResponse.success(authContext, "Auth context retrieved successfully")
+            );
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("Failed to retrieve auth context: " + e.getMessage()));
+        }
     }
 }

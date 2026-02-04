@@ -30,15 +30,38 @@ public class JwtTokenProvider {
     }
 
     /**
-     * Generate JWT access token
+     * Generate JWT access token with role, roles list, and permissions
+     *
+     * Token claims:
+     * - userId: User ID
+     * - companyId: Company ID (tenant)
+     * - email: User email
+     * - role: User's single role authority (e.g., "ROLE_OWNER") [DEPRECATED - use roles]
+     * - roles: List of role authorities (currently single element, future-proof for multi-role)
+     * - permissions: List of permission codes (for frontend explicit access control)
+     *
+     * Frontend reads roles and permissions directly from JWT.
+     * No AOP or tenant resolution needed - everything is explicit in the token.
      */
-    public String generateAccessToken(Long userId, Long companyId, String email, String role) {
+    public String generateAccessToken(Long userId, Long companyId, String email, String role, java.util.List<String> permissions) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", userId);
         claims.put("companyId", companyId);
-        claims.put("role", role);
+        claims.put("email", email);
+        claims.put("role", role); // Keep for backward compatibility
+        claims.put("roles", java.util.Collections.singletonList(role)); // Explicit roles list
+        claims.put("permissions", permissions != null ? permissions : new java.util.ArrayList<>());
 
         return createToken(claims, email, jwtExpirationMs);
+    }
+
+    /**
+     * Legacy method - use generateAccessToken(userId, companyId, email, role, permissions) instead
+     * @deprecated Use generateAccessToken with permissions parameter
+     */
+    @Deprecated
+    public String generateAccessToken(Long userId, Long companyId, String email, String role) {
+        return generateAccessToken(userId, companyId, email, role, new java.util.ArrayList<>());
     }
 
     /**
@@ -106,7 +129,7 @@ public class JwtTokenProvider {
     }
 
     /**
-     * Extract role from JWT token
+     * Extract role from JWT token (single role, primary authority)
      */
     public String getRoleFromJwt(String token) {
         return (String) Jwts.parserBuilder()
@@ -115,6 +138,52 @@ public class JwtTokenProvider {
                 .parseClaimsJws(token)
                 .getBody()
                 .get("role");
+    }
+
+    /**
+     * Extract roles list from JWT token
+     * Returns empty list if roles not present
+     */
+    @SuppressWarnings("unchecked")
+    public java.util.List<String> getRolesFromJwt(String token) {
+        try {
+            Object rolesObj = Jwts.parserBuilder()
+                    .setSigningKey(getSigningKey())
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody()
+                    .get("roles");
+
+            if (rolesObj instanceof java.util.List) {
+                return (java.util.List<String>) rolesObj;
+            }
+            return new java.util.ArrayList<>();
+        } catch (Exception e) {
+            return new java.util.ArrayList<>();
+        }
+    }
+
+    /**
+     * Extract permissions list from JWT token
+     * Returns empty list if permissions not present
+     */
+    @SuppressWarnings("unchecked")
+    public java.util.List<String> getPermissionsFromJwt(String token) {
+        try {
+            Object permissionsObj = Jwts.parserBuilder()
+                    .setSigningKey(getSigningKey())
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody()
+                    .get("permissions");
+
+            if (permissionsObj instanceof java.util.List) {
+                return (java.util.List<String>) permissionsObj;
+            }
+            return new java.util.ArrayList<>();
+        } catch (Exception e) {
+            return new java.util.ArrayList<>();
+        }
     }
 
     /**
