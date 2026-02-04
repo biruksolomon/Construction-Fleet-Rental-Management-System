@@ -13,4 +13,9 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     List<Invoice> findByCompanyId(Long companyId);
     List<Invoice> findByCompanyIdAndStatus(Long companyId, Invoice.InvoiceStatus status);
     List<Invoice> findByIssuedDateBetween(LocalDate startDate, LocalDate endDate);
+
+    /**
+     * Find invoice by rental contract ID
+     */
+    Optional<Invoice> findByRentalContractId(Long rentalContractId);
 }
