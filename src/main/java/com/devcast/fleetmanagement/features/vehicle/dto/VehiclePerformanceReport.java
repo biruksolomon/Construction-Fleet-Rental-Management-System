@@ -1,12 +1,20 @@
 package com.devcast.fleetmanagement.features.vehicle.dto;
 
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 
-public record VehiclePerformanceReport(
-        Long vehicleId,
-        BigDecimal efficiency,
-        BigDecimal reliability,
-        BigDecimal utilization,
-        BigDecimal profitability,
-        String overallRating
-) {}
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class VehiclePerformanceReport {
+    private Long vehicleId;
+    private BigDecimal efficiency;
+    private BigDecimal reliability;
+    private BigDecimal utilization;
+    private BigDecimal profitability;
+    private String overallRating;
+}

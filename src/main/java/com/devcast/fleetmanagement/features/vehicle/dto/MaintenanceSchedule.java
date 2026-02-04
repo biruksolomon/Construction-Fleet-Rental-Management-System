@@ -1,9 +1,18 @@
 package com.devcast.fleetmanagement.features.vehicle.dto;
 
-public record MaintenanceSchedule(
-        Long vehicleId,
-        String serviceType,
-        Long dueMileage,
-        Long dueDate,
-        String status
-) {}
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class MaintenanceSchedule {
+    private Long vehicleId;
+    private String serviceType;
+    private Long dueMileage;
+    private Long dueDate;
+    private String status;
+}

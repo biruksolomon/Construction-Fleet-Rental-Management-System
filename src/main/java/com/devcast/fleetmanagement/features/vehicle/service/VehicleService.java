@@ -15,8 +15,24 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Vehicle Service Interface
- * Handles vehicle management, maintenance, fuel tracking, and analytics
+ * Vehicle Service Interface (DTO-Based)
+ *
+ * Defines contract for vehicle management using DTOs to separate API contracts from entities.
+ *
+ * Design Principles:
+ * 1. All requests use *Request DTOs (no IDs, timestamps, or status)
+ * 2. All responses use *Response DTOs (complete vehicle information)
+ * 3. Service never exposes raw entities through API contracts
+ * 4. RBAC checks performed in implementation
+ *
+ * Includes:
+ * - Vehicle CRUD operations
+ * - Vehicle status management
+ * - Time tracking and GPS logging
+ * - Fuel management and analysis
+ * - Maintenance scheduling
+ * - Vehicle analytics and reporting
+ * - Usage limits and monitoring
  */
 public interface VehicleService {
 
@@ -24,70 +40,100 @@ public interface VehicleService {
 
     /**
      * Create new vehicle
+     * Request: VehicleCreateRequest (no id, timestamps, status)
+     * Response: VehicleResponse (complete vehicle representation)
+     * RBAC: OWNER, ADMIN, FLEET_MANAGER
      */
-    Vehicle createVehicle(Long companyId, Vehicle vehicle);
+    VehicleResponse createVehicle(Long companyId, VehicleCreateRequest request);
 
     /**
-     * Get vehicle by ID
+     * Get vehicle by ID with multi-tenant check
+     * Response: VehicleResponse (complete vehicle details)
+     * RBAC: OWNER, ADMIN, FLEET_MANAGER
      */
-    Optional<Vehicle> getVehicleById(Long vehicleId);
+    Optional<VehicleResponse> getVehicleById(Long vehicleId);
+
+    /**
+     * Get vehicle by plate number
+     * Response: VehicleResponse
+     * RBAC: Multi-tenant check enforced
+     */
+    Optional<VehicleResponse> getVehicleByPlateNumber(Long companyId, String plateNumber);
 
     /**
      * Update vehicle details
+     * Request: VehicleUpdateRequest (all fields optional, no id/timestamps)
+     * Response: VehicleResponse (updated vehicle representation)
+     * RBAC: OWNER, ADMIN, FLEET_MANAGER
      */
-    Vehicle updateVehicle(Long vehicleId, Vehicle vehicle);
+    VehicleResponse updateVehicle(Long vehicleId, VehicleUpdateRequest request);
 
     /**
-     * Delete vehicle
+     * Delete vehicle permanently
+     * RBAC: OWNER, ADMIN only
      */
     void deleteVehicle(Long vehicleId);
 
     /**
-     * Get all vehicles in company
+     * Get all vehicles in company with pagination
+     * Response: Page<VehicleResponse> (paginated vehicle list)
+     * RBAC: Multi-tenant check enforced
      */
-    Page<Vehicle> getVehiclesByCompany(Long companyId, Pageable pageable);
+    Page<VehicleResponse> getVehiclesByCompany(Long companyId, Pageable pageable);
 
     /**
-     * Get active vehicles
+     * Get active vehicles in company
+     * Response: List<VehicleResponse> (available vehicles only)
+     * RBAC: Multi-tenant check enforced
      */
-    List<Vehicle> getActiveVehicles(Long companyId);
+    List<VehicleResponse> getActiveVehicles(Long companyId);
 
     /**
      * Get vehicles by status
+     * Response: Page<VehicleResponse> (filtered by status)
+     * RBAC: Multi-tenant check enforced
      */
-    Page<Vehicle> getVehiclesByStatus(Long companyId, String status, Pageable pageable);
+    Page<VehicleResponse> getVehiclesByStatus(Long companyId, Vehicle.VehicleStatus status, Pageable pageable);
 
     // ==================== Vehicle Status Management ====================
 
     /**
      * Mark vehicle as available
+     * RBAC: OWNER, ADMIN, FLEET_MANAGER
      */
     void markAvailable(Long vehicleId);
 
     /**
-     * Mark vehicle as in-use
+     * Mark vehicle as rented
+     * RBAC: OWNER, ADMIN, FLEET_MANAGER
      */
-    void markInUse(Long vehicleId);
+    void markRented(Long vehicleId);
 
     /**
      * Mark vehicle for maintenance
+     * Request: Reason for maintenance
+     * RBAC: OWNER, ADMIN, FLEET_MANAGER
      */
     void markForMaintenance(Long vehicleId, String reason);
 
     /**
      * Mark vehicle as inactive
+     * Request: Reason for inactivity
+     * RBAC: OWNER, ADMIN only
      */
     void markInactive(Long vehicleId, String reason);
 
     /**
      * Check vehicle availability
+     * Response: boolean
      */
     boolean isVehicleAvailable(Long vehicleId);
 
     /**
      * Get vehicle current status
+     * Response: VehicleStatus enum
      */
-    Optional<String> getVehicleStatus(Long vehicleId);
+    Optional<Vehicle.VehicleStatus> getVehicleStatus(Long vehicleId);
 
     // ==================== Vehicle Usage Limits ====================
 
@@ -232,7 +278,23 @@ public interface VehicleService {
     /**
      * Get vehicles needing maintenance
      */
-    List<Vehicle> getVehiclesNeedingMaintenance(Long companyId);
+    List<VehicleResponse> getVehiclesNeedingMaintenance(Long companyId);
+
+    // ==================== Vehicle Search & Filter ====================
+
+    /**
+     * Search vehicles by plate number or asset code
+     * Response: Page<VehicleResponse> (matching vehicles)
+     * RBAC: Multi-tenant check enforced
+     */
+    Page<VehicleResponse> searchVehicles(Long companyId, String searchTerm, Pageable pageable);
+
+    /**
+     * Filter vehicles by multiple criteria
+     * Response: Page<VehicleResponse> (filtered vehicles)
+     * RBAC: Multi-tenant check enforced
+     */
+    Page<VehicleResponse> filterVehicles(Long companyId, VehicleFilterCriteria criteria, Pageable pageable);
 
     /**
      * Get total maintenance cost

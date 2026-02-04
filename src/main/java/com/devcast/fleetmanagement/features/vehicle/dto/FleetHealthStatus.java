@@ -1,13 +1,20 @@
 package com.devcast.fleetmanagement.features.vehicle.dto;
 
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 
-public record FleetHealthStatus(
-        Long companyId,
-        Integer totalVehicles,
-        Integer activeVehicles,
-        Integer maintenanceVehicles,
-        Double avgFuelConsumption,
-        BigDecimal avgMaintenanceCost,
-        String healthRating
-) {}
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class FleetHealthStatus {
+    private Long companyId;
+    private Integer totalVehicles;
+    private Integer availableVehicles;
+    private Integer rentedVehicles;
+    private Integer maintenanceVehicles;
+    private Double healthPercentage;
+}

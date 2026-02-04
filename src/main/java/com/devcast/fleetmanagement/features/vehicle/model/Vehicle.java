@@ -28,8 +28,13 @@ public class Vehicle {
     @Column(nullable = false, length = 50)
     private String plateNumber;
 
+    private String licensePlateRegion;
+
+
     @Column(nullable = false, length = 100)
     private String assetCode;
+
+    private String description;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
