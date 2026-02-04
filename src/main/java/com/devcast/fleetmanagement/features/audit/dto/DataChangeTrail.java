@@ -8,3 +8,5 @@ public record DataChangeTrail(
         String newValue,
         Long timestamp
 ) {}
+
+
