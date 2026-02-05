@@ -6,6 +6,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.security.core.parameters.P;
 import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
 import java.util.List;
@@ -13,9 +14,10 @@ import java.util.Optional;
 
 @Repository
 public interface PayrollPeriodRepository extends JpaRepository<PayrollPeriod, Long> {
-    
-    Optional<PayrollPeriod> findByCompanyIdAndStatus(Long companyId, PayrollPeriod.PayrollStatus status);
-    
+
+    @Query("select pp from PayrollPeriod pp where pp.company.id=:companyId and pp.status='OPEN'")
+    Optional<PayrollPeriod> findByCompanyIdAndStatus(@Param("companyId") Long companyId);
+
     List<PayrollPeriod> findByCompanyIdAndStatus(Long companyId, PayrollPeriod.PayrollStatus status);
     
     Page<PayrollPeriod> findByCompanyId(Long companyId, Pageable pageable);

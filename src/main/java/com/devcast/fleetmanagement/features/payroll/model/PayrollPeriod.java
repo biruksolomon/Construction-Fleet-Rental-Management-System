@@ -1,11 +1,14 @@
 package com.devcast.fleetmanagement.features.payroll.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -23,6 +26,7 @@ public class PayrollPeriod {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "company_id", nullable = false)
+    @JsonIgnore
     private com.devcast.fleetmanagement.features.company.model.Company company;
 
     @Column(nullable = false)
@@ -35,12 +39,49 @@ public class PayrollPeriod {
     @Column(nullable = false)
     private PayrollStatus status;
 
+    @Column(nullable = false, precision = 12, scale = 2)
+    private BigDecimal totalGrossSalary;
+
+    @Column(nullable = false, precision = 12, scale = 2)
+    private BigDecimal totalDeductions;
+
+    @Column(nullable = false, precision = 12, scale = 2)
+    private BigDecimal totalNetSalary;
+
+    @Column
+    private LocalDateTime approvedDate;
+
+    @Column
+    private String approvedBy;
+
+    @Column
+    private LocalDateTime closedDate;
+
+    @Column
+    private String closedBy;
+
+    @Column
+    private LocalDateTime finalizedDate;
+
+    @Column
+    private String finalizedBy;
+
     @OneToMany(mappedBy = "payrollPeriod", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
+    @JsonIgnore
     private List<PayrollRecord> payrollRecords = new ArrayList<>();
+
+    @Column
+    private LocalDateTime createdAt;
+
+    @Column
+    private LocalDateTime updatedAt;
 
     public enum PayrollStatus {
         OPEN,
-        CLOSED
+        LOCKED,
+        CLOSED,
+        FINALIZED,
+        CANCELLED
     }
 }

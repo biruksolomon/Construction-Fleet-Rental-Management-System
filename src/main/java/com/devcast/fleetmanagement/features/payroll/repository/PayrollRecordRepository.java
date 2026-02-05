@@ -37,7 +37,16 @@ public interface PayrollRecordRepository extends JpaRepository<PayrollRecord, Lo
     
     @Query("SELECT COUNT(pr) FROM PayrollRecord pr WHERE pr.payrollPeriod.id = :periodId AND pr.status = 'APPROVED'")
     long countApprovedRecordsForPeriod(@Param("periodId") Long periodId);
-    
-    @Query("SELECT pr FROM PayrollRecord pr WHERE pr.driver.id = :driverId ORDER BY pr.payrollPeriod.endDate DESC")
-    List<PayrollRecord> getEmployeePayrollHistory(@Param("driverId") Long driverId, Pageable pageable);
+
+
+    @Query("""
+    SELECT pr FROM PayrollRecord pr
+    WHERE pr.driver.id = :driverId
+    ORDER BY pr.payrollPeriod.endDate DESC
+""")
+    Page<PayrollRecord> getEmployeePayrollHistory(
+            @Param("driverId") Long driverId,
+            Pageable pageable
+    );
+
 }
