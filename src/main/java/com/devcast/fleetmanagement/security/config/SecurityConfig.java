@@ -93,7 +93,16 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST,
                                 "/api/auth/register",
                                 "/api/auth/login",
-                                "/api/auth/refresh-token"
+                                "/api/auth/refresh-token",
+                                "/api/auth/verify-email",
+                                "/api/auth/resend-verification",
+                                "/api/auth/request-password-reset",
+                                "/api/auth/confirm-password-reset",
+                                "/api/auth/resend-password-reset"
+                        ).permitAll()
+
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/auth/validate-reset-code"
                         ).permitAll()
 
                         .requestMatchers(
@@ -160,10 +169,10 @@ public class SecurityConfig {
 
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(
-                List.of("http://localhost:3000", "http://localhost:8080")
+                List.of("http://localhost:3000", "http://localhost:3002", "http://localhost:8080")
         );
         configuration.setAllowedMethods(
-                List.of("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH")
         );
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
