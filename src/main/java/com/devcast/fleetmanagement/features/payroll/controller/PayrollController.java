@@ -34,7 +34,7 @@ public class PayrollController {
     // ==================== Payroll Period APIs ====================
 
     @PostMapping("/periods/company/{companyId}")
-    @PreAuthorize("hasAuthority('CREATE_PAYROLL')")
+   /* @PreAuthorize("hasAuthority('CREATE_PAYROLL')")*/
     @Operation(summary = "Create payroll period", description = "Create new payroll period for a company")
     public ResponseEntity<ApiResponse<PayrollPeriodResponse>> createPayrollPeriod(
             @PathVariable Long companyId,
@@ -114,7 +114,7 @@ public class PayrollController {
     }
 
     @PostMapping("/periods/{periodId}/close")
-    @PreAuthorize("hasAuthority('UPDATE_PAYROLL')")
+    /*@PreAuthorize("hasAuthority('UPDATE_PAYROLL')")*/
     @Operation(summary = "Close payroll period", description = "Close payroll period for final processing")
     public ResponseEntity<ApiResponse<String>> closePayrollPeriod(
             @PathVariable Long periodId
@@ -129,7 +129,7 @@ public class PayrollController {
     }
 
     @PostMapping("/periods/{periodId}/finalize")
-    @PreAuthorize("hasAuthority('UPDATE_PAYROLL')")
+    /*@PreAuthorize("hasAuthority('UPDATE_PAYROLL')")*/
     @Operation(summary = "Finalize payroll period", description = "Finalize payroll period for payment")
     public ResponseEntity<ApiResponse<String>> finalizePayrollPeriod(
             @PathVariable Long periodId
@@ -146,7 +146,7 @@ public class PayrollController {
     // ==================== Payroll Record APIs ====================
 
     @PostMapping("/periods/{periodId}/generate")
-    @PreAuthorize("hasAuthority('CREATE_PAYROLL')")
+   /* @PreAuthorize("hasAuthority('CREATE_PAYROLL')")*/
     @Operation(summary = "Generate payroll records", description = "Generate payroll records for all employees in period")
     public ResponseEntity<ApiResponse<List<PayrollRecordResponse>>> generatePayrollRecords(
             @PathVariable Long periodId
@@ -204,7 +204,7 @@ public class PayrollController {
     }
 
     @PostMapping("/records/{recordId}/approve")
-    @PreAuthorize("hasAuthority('UPDATE_PAYROLL')")
+   /* @PreAuthorize("hasAuthority('UPDATE_PAYROLL')")*/
     @Operation(summary = "Approve payroll record", description = "Approve payroll record for payment")
     public ResponseEntity<ApiResponse<String>> approvePayrollRecord(
             @PathVariable Long recordId
@@ -219,7 +219,7 @@ public class PayrollController {
     }
 
     @PostMapping("/records/{recordId}/reject")
-    @PreAuthorize("hasAuthority('UPDATE_PAYROLL')")
+    /*@PreAuthorize("hasAuthority('UPDATE_PAYROLL')")*/
     @Operation(summary = "Reject payroll record", description = "Reject payroll record")
     public ResponseEntity<ApiResponse<String>> rejectPayrollRecord(
             @PathVariable Long recordId,
@@ -302,7 +302,7 @@ public class PayrollController {
     // ==================== Payment Processing APIs ====================
 
     @PostMapping("/records/{recordId}/process-payment")
-    @PreAuthorize("hasAuthority('UPDATE_PAYROLL')")
+    /*@PreAuthorize("hasAuthority('UPDATE_PAYROLL')")*/
     @Operation(summary = "Process payment", description = "Process payment for payroll record")
     public ResponseEntity<ApiResponse<String>> processPayment(
             @PathVariable Long recordId,
@@ -319,7 +319,7 @@ public class PayrollController {
     }
 
     @PostMapping("/periods/{periodId}/batch-payment")
-    @PreAuthorize("hasAuthority('UPDATE_PAYROLL')")
+    /*@PreAuthorize("hasAuthority('UPDATE_PAYROLL')")*/
     @Operation(summary = "Batch process payments", description = "Process payments for all approved records in period")
     public ResponseEntity<ApiResponse<String>> batchProcessPayments(
             @PathVariable Long periodId,

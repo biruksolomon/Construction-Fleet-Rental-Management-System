@@ -9,6 +9,8 @@ import com.devcast.fleetmanagement.features.payroll.model.PayrollRecord;
 import com.devcast.fleetmanagement.features.payroll.repository.PayrollPeriodRepository;
 import com.devcast.fleetmanagement.features.payroll.repository.PayrollRecordRepository;
 import com.devcast.fleetmanagement.features.payroll.util.SalaryCalculationUtil;
+import com.devcast.fleetmanagement.features.user.model.util.Permission;
+import com.devcast.fleetmanagement.security.annotation.RequirePermission;
 import com.devcast.fleetmanagement.security.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +41,7 @@ public class PayrollServiceImpl implements PayrollService {
     // ==================== Payroll Period Management ====================
 
     @Override
+    @RequirePermission(Permission.CREATE_PAYROLL)
     public PayrollPeriod createPayrollPeriod(Long companyId, PayrollPeriod period) {
         log.info("[Payroll] Creating payroll period for company {}", companyId);
 
@@ -76,6 +79,7 @@ public class PayrollServiceImpl implements PayrollService {
     }
 
     @Override
+    @RequirePermission(Permission.UPDATE_PAYROLL)
     public PayrollPeriod updatePayrollPeriod(Long periodId, PayrollPeriod period) {
         PayrollPeriod existing = getPayrollPeriodById(periodId)
                 .orElseThrow(() -> PayrollPeriodException.notFound(periodId));
@@ -85,6 +89,7 @@ public class PayrollServiceImpl implements PayrollService {
     }
 
     @Override
+    @RequirePermission(Permission.UPDATE_PAYROLL)
     public void closePayrollPeriod(Long periodId) {
         log.info("[Payroll] Closing payroll period {}", periodId);
 
@@ -105,6 +110,7 @@ public class PayrollServiceImpl implements PayrollService {
     }
 
     @Override
+    @RequirePermission(Permission.UPDATE_PAYROLL)
     public void cancelPayrollPeriod(Long periodId, String reason) {
         log.info("[Payroll] Cancelling payroll period {} - Reason: {}", periodId, reason);
 
@@ -119,6 +125,7 @@ public class PayrollServiceImpl implements PayrollService {
     }
 
     @Override
+    @RequirePermission(Permission.UPDATE_PAYROLL)
     public void lockPayrollPeriod(Long periodId) {
         log.info("[Payroll] Locking payroll period {}", periodId);
 
@@ -132,6 +139,7 @@ public class PayrollServiceImpl implements PayrollService {
     }
 
     @Override
+    @RequirePermission(Permission.UPDATE_PAYROLL)
     public void finalizePayrollPeriod(Long periodId) {
         log.info("[Payroll] Finalizing payroll period {}", periodId);
 
@@ -150,6 +158,7 @@ public class PayrollServiceImpl implements PayrollService {
     // ==================== Payroll Record Operations ====================
 
     @Override
+    @RequirePermission(Permission.CREATE_PAYROLL)
     public List<PayrollRecord> generatePayrollRecords(Long periodId) {
         log.info("[Payroll] Generating payroll records for period {}", periodId);
 
@@ -214,6 +223,7 @@ public class PayrollServiceImpl implements PayrollService {
 
 
     @Override
+    @RequirePermission(Permission.UPDATE_PAYROLL)
     public PayrollRecord updatePayrollRecord(Long recordId, PayrollRecord record) {
         PayrollRecord existing = getPayrollRecord(recordId)
                 .orElseThrow(() -> PayrollRecordException.notFound(recordId));
@@ -223,6 +233,7 @@ public class PayrollServiceImpl implements PayrollService {
     }
 
     @Override
+    @RequirePermission(Permission.APPROVE_PAYROLL)
     public void approvePayrollRecord(Long recordId) {
         log.info("[Payroll] Approving payroll record {}", recordId);
 
@@ -239,6 +250,7 @@ public class PayrollServiceImpl implements PayrollService {
     }
 
     @Override
+    @RequirePermission(Permission.APPROVE_PAYROLL)
     public void rejectPayrollRecord(Long recordId, String reason) {
         log.info("[Payroll] Rejecting payroll record {} - Reason: {}", recordId, reason);
 
@@ -253,6 +265,7 @@ public class PayrollServiceImpl implements PayrollService {
     }
 
     @Override
+    @RequirePermission(Permission.UPDATE_PAYROLL)
     public void voidPayrollRecord(Long recordId, String reason) {
         log.info("[Payroll] Voiding payroll record {} - Reason: {}", recordId, reason);
 
@@ -416,6 +429,7 @@ public class PayrollServiceImpl implements PayrollService {
     // ==================== Payment Processing ====================
 
     @Override
+    @RequirePermission(Permission.UPDATE_PAYROLL)
     public void processPayment(Long recordId, String paymentMethod, String reference) {
         log.info("[Payroll] Processing payment for record {} via {}", recordId, paymentMethod);
 
@@ -436,6 +450,7 @@ public class PayrollServiceImpl implements PayrollService {
     }
 
     @Override
+    @RequirePermission(Permission.UPDATE_PAYROLL)
     public void batchProcessPayments(Long periodId, String paymentMethod) {
         log.info("[Payroll] Batch processing payments for period {}", periodId);
 
