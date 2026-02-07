@@ -113,6 +113,6 @@ public class PermissionAuthorizationFilter extends OncePerRequestFilter {
     protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
         // Skip filtering for public endpoints
         String path = request.getRequestURI();
-        return path.startsWith("/api/auth/") || path.startsWith("/api/public/");
+        return path.startsWith("/api/auth/") || path.startsWith("/api/public/") || path.startsWith("/api/swagger-ui/index.html");
     }
 }
