@@ -2,9 +2,14 @@ package com.devcast.fleetmanagement.features.auth.service;
 
 import com.devcast.fleetmanagement.features.auth.dto.*;
 import com.devcast.fleetmanagement.features.auth.model.EmailVerificationCode;
+import com.devcast.fleetmanagement.features.auth.model.LoginAttempt;
 import com.devcast.fleetmanagement.features.auth.model.PasswordResetCode;
+import com.devcast.fleetmanagement.features.auth.model.RefreshToken;
 import com.devcast.fleetmanagement.features.auth.repository.EmailVerificationCodeRepository;
+import com.devcast.fleetmanagement.features.auth.repository.LoginAttemptRepository;
 import com.devcast.fleetmanagement.features.auth.repository.PasswordResetCodeRepository;
+import com.devcast.fleetmanagement.features.auth.repository.RefreshTokenRepository;
+import com.devcast.fleetmanagement.features.auth.util.PasswordPolicy;
 import com.devcast.fleetmanagement.features.company.model.Company;
 import com.devcast.fleetmanagement.features.company.repository.CompanyRepository;
 import com.devcast.fleetmanagement.features.user.model.User;
@@ -16,10 +21,16 @@ import com.devcast.fleetmanagement.security.jwt.JwtAuthenticationException;
 import com.devcast.fleetmanagement.security.jwt.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
+import jakarta.servlet.http.HttpServletRequest;
+
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.Random;
@@ -43,44 +54,68 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     private final CompanyRepository companyRepository;
     private final EmailVerificationCodeRepository emailVerificationCodeRepository;
     private final PasswordResetCodeRepository passwordResetCodeRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
+    private final LoginAttemptRepository loginAttemptRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
+    private final PasswordPolicy passwordPolicy;
+
+    @Value("${login.security.max-failed-attempts:5}")
+    private int maxFailedAttempts;
+
+    @Value("${login.security.lock-duration-minutes:15}")
+    private int lockDurationMinutes;
+
+    @Value("${login.security.attempt-window-minutes:15}")
+    private int attemptWindowMinutes;
 
     /**
      * Authenticate user with email and password
      * Business Logic:
-     * 1. Find user by email
-     * 2. Verify password
-     * 3. Check user status (ACTIVE)
-     * 4. Verify company is active
-     * 5. Generate JWT tokens
-     * 6. Return auth response with user info
+     * 1. Check login attempt counter and account lock status
+     * 2. Find user by email
+     * 3. Verify email is verified
+     * 4. Verify password
+     * 5. Check user status (ACTIVE)
+     * 6. Verify company is active
+     * 7. Generate JWT tokens with database refresh token storage
+     * 8. Return auth response with user info
      */
     @Override
     public AuthenticationResponse authenticate(String email, String password) {
         // Validate input
         if (email == null || email.trim().isEmpty() || password == null || password.isEmpty()) {
+            recordLoginAttempt(email, false, "Email and password are required");
             throw new JwtAuthenticationException("Email and password are required");
         }
 
+        // Check if account is locked due to failed attempts
+        checkAccountLockStatus(email);
+
         // Find user by email
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new JwtAuthenticationException("User not found with email: " + email));
+                .orElseThrow(() -> {
+                    recordLoginAttempt(email, false, "User not found");
+                    return new JwtAuthenticationException("Invalid email or password");
+                });
 
-        // Check user status
+        // ENFORCE: Email must be verified before login
         if (user.getStatus() != User.UserStatus.ACTIVE) {
-            throw new JwtAuthenticationException("User account is not active. Status: " + user.getStatus());
+            recordLoginAttempt(email, false, "User account is not active. Status: " + user.getStatus());
+            throw new JwtAuthenticationException("User account is not active or email not verified. Please verify your email first.");
         }
 
         // Verify company is active
         Company company = user.getCompany();
         if (company.getStatus() != Company.CompanyStatus.ACTIVE) {
+            recordLoginAttempt(email, false, "Company account is suspended");
             throw new JwtAuthenticationException("Company account is suspended");
         }
 
         // Verify password
         if (!passwordEncoder.matches(password, user.getPasswordHash())) {
+            recordLoginAttempt(email, false, "Invalid password");
             throw new JwtAuthenticationException("Invalid email or password");
         }
 
@@ -93,11 +128,17 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 getPermissionsForRole(user.getRole())
         );
 
-        String refreshToken = jwtTokenProvider.generateRefreshToken(
+        // Generate and store refresh token in database
+        String refreshTokenString = jwtTokenProvider.generateRefreshToken(
                 user.getId(),
                 company.getId(),
                 user.getEmail()
         );
+
+        storeRefreshToken(user, refreshTokenString);
+
+        // Record successful login
+        recordLoginAttempt(email, true, null);
 
         // Create response
         UserInfo userInfo = new UserInfo(
@@ -110,7 +151,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
         return new AuthenticationResponse(
                 accessToken,
-                refreshToken,
+                refreshTokenString,
                 jwtTokenProvider.getTokenExpirationTime(accessToken),
                 "Bearer",
                 userInfo
@@ -198,19 +239,29 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     }
 
     /**
-     * Logout user (token invalidation)
-     * In JWT-based systems, logout is typically client-side (discard token)
-     * This can be extended to implement token blacklist mechanism
+     * Logout user - invalidate refresh tokens
+     * Business Logic:
+     * 1. Validate token
+     * 2. Extract user ID from token
+     * 3. Revoke all refresh tokens for the user
      */
     @Override
     public void logout(String token) {
-        // Implementation note: Token invalidation can be done via:
-        // 1. Redis blacklist (store revoked tokens)
-        // 2. Database token store
-        // 3. Client-side token discard (current approach - stateless)
+        try {
+            // Validate token exists and is not expired
+            validateToken(token);
 
-        // For now, just validate token exists
-        validateToken(token);
+            // Extract user ID
+            Long userId = jwtTokenProvider.getUserIdFromJwt(token);
+
+            // Revoke all user's refresh tokens
+            refreshTokenRepository.revokeAllUserTokens(userId);
+
+            log.info("User {} logged out successfully", userId);
+        } catch (JwtAuthenticationException e) {
+            log.warn("Logout attempted with invalid token: {}", e.getMessage());
+            throw e;
+        }
     }
 
     /**
@@ -257,14 +308,21 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         if (request.email() == null || request.email().trim().isEmpty()) {
             throw new IllegalArgumentException("Email is required");
         }
-        if (request.password() == null || request.password().length() < 8) {
-            throw new IllegalArgumentException("Password must be at least 8 characters");
+        if (request.password() == null || request.password().isEmpty()) {
+            throw new IllegalArgumentException("Password is required");
         }
         if (request.fullName() == null || request.fullName().trim().isEmpty()) {
             throw new IllegalArgumentException("Full name is required");
         }
         if (request.companyId() == null || request.companyId() <= 0) {
             throw new IllegalArgumentException("Valid company ID is required");
+        }
+
+        // ENFORCE: Strong password policy
+        try {
+            passwordPolicy.validatePassword(request.password());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Password does not meet security requirements: " + e.getMessage());
         }
 
         // Check email is not already registered
@@ -479,8 +537,15 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         log.info("Resetting password for email: {}", email);
 
         // Validate new password
-        if (newPassword == null || newPassword.length() < 8) {
-            throw new IllegalArgumentException("Password must be at least 8 characters");
+        if (newPassword == null || newPassword.isEmpty()) {
+            throw new IllegalArgumentException("Password is required");
+        }
+
+        // ENFORCE: Strong password policy
+        try {
+            passwordPolicy.validatePassword(newPassword);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Password does not meet security requirements: " + e.getMessage());
         }
 
         // Find reset code
@@ -600,5 +665,123 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .map(Permission::getCode)
                 .sorted()
                 .collect(java.util.stream.Collectors.toList());
+    }
+
+    /**
+     * Check if user account is locked due to too many failed login attempts
+     */
+    private void checkAccountLockStatus(String email) {
+        LocalDateTime lockWindow = LocalDateTime.now().minusMinutes(attemptWindowMinutes);
+        long failedAttempts = loginAttemptRepository.countFailedAttemptsSince(email, lockWindow);
+
+        if (failedAttempts >= maxFailedAttempts) {
+            log.warn("Account locked due to {} failed attempts for email: {}", failedAttempts, email);
+            throw new JwtAuthenticationException(
+                    "Account locked due to multiple failed login attempts. Please try again in " +
+                            lockDurationMinutes + " minutes or reset your password."
+            );
+        }
+    }
+
+    /**
+     * Record login attempt in database
+     */
+    private void recordLoginAttempt(String email, boolean success, String failureReason) {
+        try {
+            String ipAddress = getClientIpAddress();
+            String userAgent = getClientUserAgent();
+
+            User user = null;
+            if (success) {
+                user = userRepository.findByEmail(email).orElse(null);
+            }
+
+            LoginAttempt attempt = LoginAttempt.builder()
+                    .user(user)
+                    .email(email)
+                    .success(success)
+                    .ipAddress(ipAddress)
+                    .userAgent(userAgent)
+                    .failureReason(failureReason)
+                    .build();
+
+            loginAttemptRepository.save(attempt);
+        } catch (Exception e) {
+            log.error("Failed to record login attempt", e);
+        }
+    }
+
+    /**
+     * Store refresh token in database with device info
+     */
+    private void storeRefreshToken(User user, String tokenString) {
+        try {
+            String deviceIdentifier = getDeviceIdentifier();
+            String userAgent = getClientUserAgent();
+            String ipAddress = getClientIpAddress();
+
+            RefreshToken refreshToken = RefreshToken.builder()
+                    .user(user)
+                    .token(tokenString)
+                    .deviceIdentifier(deviceIdentifier)
+                    .userAgent(userAgent)
+                    .ipAddress(ipAddress)
+                    .expiryTime(LocalDateTime.now().plusDays(7))
+                    .revoked(false)
+                    .rotated(false)
+                    .build();
+
+            refreshTokenRepository.save(refreshToken);
+            log.info("Refresh token stored for user: {} from device: {}", user.getId(), deviceIdentifier);
+        } catch (Exception e) {
+            log.error("Failed to store refresh token", e);
+            throw new JwtAuthenticationException("Failed to generate refresh token");
+        }
+    }
+
+    /**
+     * Get client IP address from request
+     */
+    private String getClientIpAddress() {
+        try {
+            ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            if (attrs != null) {
+                HttpServletRequest request = attrs.getRequest();
+                String clientIp = request.getHeader("X-Forwarded-For");
+                if (clientIp == null || clientIp.isEmpty()) {
+                    clientIp = request.getRemoteAddr();
+                }
+                return clientIp;
+            }
+        } catch (Exception e) {
+            log.debug("Could not retrieve client IP address");
+        }
+        return "UNKNOWN";
+    }
+
+    /**
+     * Get client user agent from request
+     */
+    private String getClientUserAgent() {
+        try {
+            ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            if (attrs != null) {
+                return attrs.getRequest().getHeader("User-Agent");
+            }
+        } catch (Exception e) {
+            log.debug("Could not retrieve client user agent");
+        }
+        return "UNKNOWN";
+    }
+
+    /**
+     * Generate device identifier from user agent and IP
+     */
+    private String getDeviceIdentifier() throws NoSuchAlgorithmException {
+        String userAgent = getClientUserAgent();
+        String ipAddress = getClientIpAddress();
+        return java.security.MessageDigest.getInstance("SHA-256")
+                .digest((userAgent + ipAddress).getBytes())
+                .toString();
     }
 }
