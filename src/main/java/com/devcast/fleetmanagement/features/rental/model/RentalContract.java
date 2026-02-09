@@ -49,10 +49,28 @@ public class RentalContract {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private ContractStatus status;
+    private RentalStatus status;
+
+    @Column
+    private LocalDateTime actualEndDate;
+
+    @Column
+    private String cancellationReason;
+
+    @Column(nullable = false)
+    private Boolean deleted = false;
+
+    @Column
+    private LocalDateTime deletedAt;
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    @Column(nullable = false)
+    private LocalDateTime updatedAt;
+
+    @Version
+    private Long version;
 
     @OneToMany(mappedBy = "rentalContract", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
@@ -61,6 +79,50 @@ public class RentalContract {
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
+        updatedAt = LocalDateTime.now();
+        deleted = false;
+        if (status == null) {
+            status = RentalStatus.PENDING;
+        }
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
+
+    /**
+     * Validate date range
+     */
+    public void validateDates() {
+        if (endDate.isBefore(startDate) || endDate.equals(startDate)) {
+            throw new IllegalArgumentException("End date must be after start date");
+        }
+    }
+
+    /**
+     * Check if rental is overdue
+     */
+    public boolean isOverdue() {
+        return status == RentalStatus.ACTIVE && LocalDate.now().isAfter(endDate);
+    }
+
+    /**
+     * Mark as overdue
+     */
+    public void markOverdue() {
+        if (status == RentalStatus.ACTIVE) {
+            this.status = RentalStatus.OVERDUE;
+        }
+    }
+
+    /**
+     * Soft delete the rental
+     */
+    public void softDelete(String reason) {
+        this.deleted = true;
+        this.deletedAt = LocalDateTime.now();
+        this.cancellationReason = reason;
     }
 
     public enum PricingModel {
@@ -69,9 +131,15 @@ public class RentalContract {
         PROJECT
     }
 
-    public enum ContractStatus {
-        ACTIVE,
-        COMPLETED,
-        CANCELLED
+    /**
+     * Rental Status Lifecycle
+     * PENDING -> ACTIVE -> (COMPLETED | OVERDUE | CANCELLED)
+     */
+    public enum RentalStatus {
+        PENDING,      // Initial state, waiting to start
+        ACTIVE,       // Currently ongoing
+        COMPLETED,    // Finished on time
+        OVERDUE,      // Exceeded end date
+        CANCELLED     // Cancelled before completion
     }
 }
