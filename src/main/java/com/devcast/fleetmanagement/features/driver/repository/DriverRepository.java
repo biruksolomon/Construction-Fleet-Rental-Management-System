@@ -80,4 +80,23 @@ public interface DriverRepository extends JpaRepository<Driver, Long> {
      */
     @Query("SELECT d FROM Driver d WHERE d.company.id = :companyId AND d.licenseExpiry < CURRENT_DATE")
     List<Driver> findDriversWithInvalidLicenses(@Param("companyId") Long companyId);
+
+    /**
+     * Find suspended drivers
+     */
+    List<Driver> findByCompanyIdAndSuspendedTrue(Long companyId);
+
+    /**
+     * Check if driver is available (not suspended, not on leave)
+     */
+    @Query("SELECT CASE WHEN COUNT(d) > 0 THEN true ELSE false END FROM Driver d " +
+            "WHERE d.id = :driverId  AND d.status = 'ACTIVE'")
+    boolean isDriverAvailable(@Param("driverId") Long driverId);
+
+    /**
+     * Check if driver is suspended
+     */
+    @Query("SELECT CASE WHEN COUNT(d) > 0 THEN true ELSE false END FROM Driver d " +
+            "WHERE d.id = :driverId AND d.status = 'SUSPENDED'")
+    boolean isDriverSuspended(@Param("driverId") Long driverId);
 }
