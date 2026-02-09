@@ -29,7 +29,7 @@ public class RentalContractResponse {
     private LocalDate endDate;
     private Boolean includeDriver;
     private RentalContract.PricingModel pricingModel;
-    private RentalContract.ContractStatus status;
+    private RentalContract.RentalStatus status;
     private BigDecimal totalCost;
     private BigDecimal paidAmount;
     private BigDecimal balanceDue;

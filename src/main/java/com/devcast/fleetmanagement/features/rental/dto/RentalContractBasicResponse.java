@@ -24,7 +24,7 @@ public class RentalContractBasicResponse {
     private String clientName;
     private LocalDate startDate;
     private LocalDate endDate;
-    private RentalContract.ContractStatus status;
+    private RentalContract.RentalStatus status;
     private int vehicleCount;
     private BigDecimal totalCost;
     private BigDecimal balanceDue;

@@ -77,34 +77,7 @@ public class AuditService {
         }
     }
 
-    /**
-     * Get audit logs for a specific company
-     *
-     * @param companyId Company ID
-     * @return List of audit logs for the company
-     */
-    public List<AuditLog> getCompanyAuditLogs(Long companyId) {
-        return auditLogRepository.findByCompanyId(companyId);
-    }
 
-    /**
-     * Get audit logs for a specific user
-     *
-     * @param userId User ID
-     * @return List of audit logs for the user
-     */
-    public List<AuditLog> getUserAuditLogs(Long userId) {
-        return auditLogRepository.findByUserId(userId);
-    }
 
-    /**
-     * Get audit logs within a time range
-     *
-     * @param startTime Start time
-     * @param endTime End time
-     * @return List of audit logs within the time range
-     */
-    public List<AuditLog> getAuditLogsByTimeRange(LocalDateTime startTime, LocalDateTime endTime) {
-        return auditLogRepository.findByTimestampBetween(startTime, endTime);
-    }
+
 }

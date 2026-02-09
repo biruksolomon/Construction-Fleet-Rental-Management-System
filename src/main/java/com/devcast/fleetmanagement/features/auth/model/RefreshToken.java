@@ -32,7 +32,7 @@ public class RefreshToken {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(nullable = false, unique = true, columnDefinition = "TEXT")
+    @Column(nullable = false, unique = true, length = 512)  // Changed from TEXT to VARCHAR
     private String token;
 
     @Column(nullable = false)
@@ -65,31 +65,20 @@ public class RefreshToken {
         createdAt = LocalDateTime.now();
     }
 
-    /**
-     * Check if token is expired
-     */
     public boolean isExpired() {
         return LocalDateTime.now().isAfter(expiryTime);
     }
 
-    /**
-     * Check if token is valid (not expired, not revoked, not rotated)
-     */
     public boolean isValid() {
         return !isExpired() && !revoked && !rotated;
     }
 
-    /**
-     * Revoke the token
-     */
     public void revoke() {
         this.revoked = true;
     }
 
-    /**
-     * Mark token as rotated (used for refresh)
-     */
     public void markRotated() {
         this.rotated = true;
     }
 }
+

@@ -69,7 +69,7 @@ public class RentalContractServiceImpl implements RentalContractService {
         contract.setContractNumber(contractNumber);
         contract.setCompany(company);
         contract.setClient(client);
-        contract.setStatus(RentalContract.ContractStatus.ACTIVE);
+        contract.setStatus(RentalContract.RentalStatus.ACTIVE);
 
         RentalContract saved = rentalContractRepository.save(contract);
 
@@ -138,7 +138,7 @@ public class RentalContractServiceImpl implements RentalContractService {
 
         verifyCompanyAccess(contract.getCompany().getId());
 
-        contract.setStatus(RentalContract.ContractStatus.CANCELLED);
+        contract.setStatus(RentalContract.RentalStatus.CANCELLED);
         rentalContractRepository.save(contract);
 
         auditService.logAuditEvent(contract.getCompany().getId(), "RENTAL_CONTRACT_CANCELLED",
@@ -157,14 +157,14 @@ public class RentalContractServiceImpl implements RentalContractService {
     @Transactional(readOnly = true)
     public List<RentalContract> getActiveContracts(Long companyId) {
         verifyCompanyAccess(companyId);
-        return rentalContractRepository.findByCompanyIdAndStatus(companyId, RentalContract.ContractStatus.ACTIVE);
+        return rentalContractRepository.findByCompanyIdAndStatus(companyId, RentalContract.RentalStatus.ACTIVE);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<RentalContract> getContractsByStatus(Long companyId, String status, Pageable pageable) {
         verifyCompanyAccess(companyId);
-        RentalContract.ContractStatus contractStatus = RentalContract.ContractStatus.valueOf(status.toUpperCase());
+        RentalContract.RentalStatus contractStatus = RentalContract.RentalStatus.valueOf(status.toUpperCase());
         return rentalContractRepository.findByCompanyIdAndStatus(companyId, contractStatus, pageable);
     }
 
@@ -179,7 +179,7 @@ public class RentalContractServiceImpl implements RentalContractService {
                 .orElseThrow(() -> new IllegalArgumentException("Contract not found"));
 
         verifyCompanyAccess(contract.getCompany().getId());
-        contract.setStatus(RentalContract.ContractStatus.ACTIVE);
+        contract.setStatus(RentalContract.RentalStatus.ACTIVE);
         rentalContractRepository.save(contract);
 
         auditService.logAuditEvent(contract.getCompany().getId(), "RENTAL_CONTRACT_CONFIRMED",
@@ -195,7 +195,7 @@ public class RentalContractServiceImpl implements RentalContractService {
                 .orElseThrow(() -> new IllegalArgumentException("Contract not found"));
 
         verifyCompanyAccess(contract.getCompany().getId());
-        contract.setStatus(RentalContract.ContractStatus.ACTIVE);
+        contract.setStatus(RentalContract.RentalStatus.ACTIVE);
 
         // Update vehicle status to RENTED
         for (RentalVehicle rv : contract.getRentalVehicles()) {
@@ -217,7 +217,7 @@ public class RentalContractServiceImpl implements RentalContractService {
                 .orElseThrow(() -> new IllegalArgumentException("Contract not found"));
 
         verifyCompanyAccess(contract.getCompany().getId());
-        contract.setStatus(RentalContract.ContractStatus.COMPLETED);
+        contract.setStatus(RentalContract.RentalStatus.COMPLETED);
 
         // Update vehicle status back to AVAILABLE
         for (RentalVehicle rv : contract.getRentalVehicles()) {
@@ -241,7 +241,7 @@ public class RentalContractServiceImpl implements RentalContractService {
     @Transactional(readOnly = true)
     public boolean isContractActive(Long contractId) {
         return rentalContractRepository.findById(contractId)
-                .map(contract -> contract.getStatus() == RentalContract.ContractStatus.ACTIVE)
+                .map(contract -> contract.getStatus() == RentalContract.RentalStatus.ACTIVE)
                 .orElse(false);
     }
 
@@ -251,7 +251,7 @@ public class RentalContractServiceImpl implements RentalContractService {
         verifyCompanyAccess(companyId);
         LocalDate threshold = LocalDate.now().plusDays(daysFromNow);
         List<RentalContract> contracts = rentalContractRepository.findByCompanyIdAndStatus(
-                companyId, RentalContract.ContractStatus.ACTIVE);
+                companyId, RentalContract.RentalStatus.ACTIVE);
 
         return contracts.stream()
                 .filter(c -> c.getEndDate().isBefore(threshold) && c.getEndDate().isAfter(LocalDate.now()))
@@ -725,7 +725,7 @@ public class RentalContractServiceImpl implements RentalContractService {
 
         return contracts.stream()
                 .filter(c -> c.getEndDate().isBefore(LocalDate.now()) &&
-                        c.getStatus() == RentalContract.ContractStatus.ACTIVE)
+                        c.getStatus() == RentalContract.RentalStatus.ACTIVE)
                 .collect(Collectors.toList());
     }
 
@@ -750,11 +750,11 @@ public class RentalContractServiceImpl implements RentalContractService {
         List<RentalContract> contracts = rentalContractRepository.findByCompanyId(companyId);
 
         int activeCount = (int) contracts.stream()
-                .filter(c -> c.getStatus() == RentalContract.ContractStatus.ACTIVE)
+                .filter(c -> c.getStatus() == RentalContract.RentalStatus.ACTIVE)
                 .count();
 
         int completedCount = (int) contracts.stream()
-                .filter(c -> c.getStatus() == RentalContract.ContractStatus.COMPLETED)
+                .filter(c -> c.getStatus() == RentalContract.RentalStatus.COMPLETED)
                 .count();
 
         BigDecimal totalRevenue = contracts.stream()

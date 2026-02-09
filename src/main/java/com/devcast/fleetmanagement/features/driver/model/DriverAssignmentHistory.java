@@ -56,15 +56,32 @@ public class DriverAssignmentHistory {
     @Column
     private String reason;
 
+    // Audit fields
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @Column
+    private String createdBy;
+
+    @Column
+    private String updatedBy;
+
     @PrePersist
     protected void onCreate() {
-        assignedAt = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now();
+        if (assignedAt == null) assignedAt = now;
+        if (createdAt == null) createdAt = now;
+        if (status == null) status = AssignmentStatus.ASSIGNED;
     }
 
     /**
      * Mark assignment as unassigned
+     * Prevents unassigning if already unassigned
      */
     public void unassign(String reason) {
+        if (status != AssignmentStatus.ASSIGNED || unassignedAt != null) {
+            throw new IllegalStateException("Assignment is already unassigned or not active.");
+        }
         this.status = AssignmentStatus.UNASSIGNED;
         this.unassignedAt = LocalDateTime.now();
         this.reason = reason;

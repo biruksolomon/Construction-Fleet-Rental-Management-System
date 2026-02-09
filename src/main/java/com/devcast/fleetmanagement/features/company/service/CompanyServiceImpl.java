@@ -571,7 +571,7 @@ public class CompanyServiceImpl implements CompanyService {
     @Transactional(readOnly = true)
     public long getActiveRentalCount(Long companyId) {
         // Count active rental contracts (ACTIVE status)
-        return rentalContractRepository.countByCompanyIdAndStatus(companyId, RentalContract.ContractStatus.ACTIVE);
+        return rentalContractRepository.countByCompanyIdAndStatus(companyId, RentalContract.RentalStatus.ACTIVE);
     }
 
     @Override
