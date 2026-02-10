@@ -24,7 +24,7 @@ import java.util.List;
  * All endpoints require authentication and RBAC authorization
  */
 @RestController
-@RequestMapping("/api/companies")
+@RequestMapping("/companies")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Companies", description = "Company management, configuration, and analytics endpoints")

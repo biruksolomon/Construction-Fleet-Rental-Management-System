@@ -28,7 +28,7 @@ import org.springframework.web.bind.annotation.*;
  * - GET /api/auth/me - Get current user info
  */
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping("/auth")
 @RequiredArgsConstructor
 @Tag(name = "Authentication", description = "User authentication and authorization endpoints")
 public class AuthController {

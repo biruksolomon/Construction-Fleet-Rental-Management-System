@@ -27,11 +27,11 @@ import java.util.List;
  * Provides REST endpoints for rental contract management, including CRUD operations,
  * pricing calculations, invoicing, and analytics.
  *
- * Base path: /api/v1/rentals
+ * Base path: /v1/rentals (context path /api is already set)
  * All endpoints require authentication and proper RBAC permissions.
  */
 @RestController
-@RequestMapping("/api/v1/rentals")
+@RequestMapping("/v1/rentals")
 @Slf4j
 @RequiredArgsConstructor
 @Tag(name = "Rentals", description = "Rental contract management APIs")

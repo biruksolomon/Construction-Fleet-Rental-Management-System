@@ -1,6 +1,8 @@
 package com.devcast.fleetmanagement.features.driver.model;
 
 import com.devcast.fleetmanagement.features.user.model.User;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -24,10 +26,14 @@ public class Driver {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "company_id", nullable = false)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    @Schema(hidden = true)
     private com.devcast.fleetmanagement.features.company.model.Company company;
 
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "company"})
+    @Schema(hidden = true)
     private User user;
 
     @Column(nullable = false, length = 50)

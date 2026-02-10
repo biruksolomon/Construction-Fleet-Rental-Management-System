@@ -24,11 +24,11 @@ import java.util.stream.Collectors;
  * Driver Management REST Controller
  * Comprehensive driver management endpoints including CRUD, assignments, and performance tracking
  *
- * Base Path: /api/drivers
+ * Base Path: /drivers (context path /api is already set)
  * Multi-tenant: Enforced at service level
  */
 @RestController
-@RequestMapping("/api/drivers")
+@RequestMapping("/drivers")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Drivers", description = "Driver management, performance, and work hours endpoints")

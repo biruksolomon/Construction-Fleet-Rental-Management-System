@@ -91,55 +91,57 @@ public class SecurityConfig {
 
                         // -------- PUBLIC ENDPOINTS --------
                         .requestMatchers(HttpMethod.POST,
-                                "/api/auth/register",
-                                "/api/auth/login",
-                                "/api/auth/refresh-token",
-                                "/api/auth/verify-email",
-                                "/api/auth/resend-verification",
-                                "/api/auth/request-password-reset",
-                                "/api/auth/confirm-password-reset",
-                                "/api/auth/resend-password-reset"
+                                "/auth/register",
+                                "/auth/login",
+                                "/auth/refresh-token",
+                                "/auth/verify-email",
+                                "/auth/resend-verification",
+                                "/auth/request-password-reset",
+                                "/auth/confirm-password-reset",
+                                "/auth/resend-password-reset"
                         ).permitAll()
 
                         .requestMatchers(HttpMethod.GET,
-                                "/api/auth/validate-reset-code"
+                                "/auth/validate-reset-code"
                         ).permitAll()
 
                         .requestMatchers(
-                                "/api/public/**",
+                                "/public/**",
                                 "/health",
                                 "/info"
                         ).permitAll()
 
                         // -------- OWNER --------
-                        .requestMatchers(HttpMethod.POST, "/api/companies").hasRole("OWNER")
-                        .requestMatchers(HttpMethod.DELETE, "/api/companies/**").hasRole("OWNER")
+                        .requestMatchers(HttpMethod.POST, "/companies").hasRole("OWNER")
+                        .requestMatchers(HttpMethod.DELETE, "/companies/**").hasRole("OWNER")
 
                         // -------- ADMIN & OWNER --------
                         .requestMatchers(
-                                "/api/users/**",
-                                "/api/company-settings/**",
-                                "/api/audit-logs/**"
+                                "/users/**",
+                                "/company-settings/**",
+                                "/audit-logs/**"
                         ).hasAnyRole("OWNER", "ADMIN")
 
                         // -------- FLEET MANAGER --------
                         .requestMatchers(
-                                "/api/vehicles/**",
-                                "/api/drivers/**",
-                                "/api/rentals/**"
+                                "/vehicles/**",
+                                "/drivers/**",
+                                "/rentals/**",
+                                "/v1/vehicles/**",
+                                "/v1/rentals/**"
                         ).hasAnyRole("OWNER", "ADMIN", "FLEET_MANAGER")
 
                         // -------- ACCOUNTANT --------
                         .requestMatchers(
-                                "/api/invoices/**",
-                                "/api/payroll/**"
+                                "/invoices/**",
+                                "/payroll/**"
                         ).hasAnyRole("OWNER", "ADMIN", "ACCOUNTANT")
 
                         // -------- DRIVER --------
-                        .requestMatchers("/api/fuel-logs/**")
+                        .requestMatchers("/fuel-logs/**")
                         .hasAnyRole("OWNER", "ADMIN", "FLEET_MANAGER", "DRIVER")
 
-                        .requestMatchers("/api/gps-logs/**")
+                        .requestMatchers("/gps-logs/**")
                         .hasAnyRole("OWNER", "ADMIN", "FLEET_MANAGER")
 
                         // -------- EVERYTHING ELSE --------

@@ -23,11 +23,11 @@ import org.springframework.web.bind.annotation.*;
  * Provides REST endpoints for vehicle management, including CRUD operations,
  * status management, time tracking, GPS logging, and analytics.
  *
- * Base path: /api/v1/vehicles
+ * Base path: /v1/vehicles (context path /api is already set)
  * All endpoints require authentication and proper RBAC permissions.
  */
 @RestController
-@RequestMapping("/api/v1/vehicles")
+@RequestMapping("/v1/vehicles")
 @Slf4j
 @RequiredArgsConstructor
 @Tag(name = "Vehicles", description = "Vehicle management APIs")

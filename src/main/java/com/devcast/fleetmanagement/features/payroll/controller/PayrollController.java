@@ -23,7 +23,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/payroll")
+@RequestMapping("/payroll")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Payroll Management", description = "APIs for payroll processing and salary management")
@@ -34,7 +34,7 @@ public class PayrollController {
     // ==================== Payroll Period APIs ====================
 
     @PostMapping("/periods/company/{companyId}")
-   /* @PreAuthorize("hasAuthority('CREATE_PAYROLL')")*/
+    /* @PreAuthorize("hasAuthority('CREATE_PAYROLL')")*/
     @Operation(summary = "Create payroll period", description = "Create new payroll period for a company")
     public ResponseEntity<ApiResponse<PayrollPeriodResponse>> createPayrollPeriod(
             @PathVariable Long companyId,
@@ -146,7 +146,7 @@ public class PayrollController {
     // ==================== Payroll Record APIs ====================
 
     @PostMapping("/periods/{periodId}/generate")
-   /* @PreAuthorize("hasAuthority('CREATE_PAYROLL')")*/
+    /* @PreAuthorize("hasAuthority('CREATE_PAYROLL')")*/
     @Operation(summary = "Generate payroll records", description = "Generate payroll records for all employees in period")
     public ResponseEntity<ApiResponse<List<PayrollRecordResponse>>> generatePayrollRecords(
             @PathVariable Long periodId
@@ -204,7 +204,7 @@ public class PayrollController {
     }
 
     @PostMapping("/records/{recordId}/approve")
-   /* @PreAuthorize("hasAuthority('UPDATE_PAYROLL')")*/
+    /* @PreAuthorize("hasAuthority('UPDATE_PAYROLL')")*/
     @Operation(summary = "Approve payroll record", description = "Approve payroll record for payment")
     public ResponseEntity<ApiResponse<String>> approvePayrollRecord(
             @PathVariable Long recordId

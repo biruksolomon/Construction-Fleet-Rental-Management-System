@@ -28,11 +28,11 @@ import java.util.List;
  * Endpoints for managing users, roles, permissions, and authentication
  * All endpoints require authentication and RBAC authorization
  *
- * Base Path: /api/users
+ * Base Path: /users (context path /api is already set)
  * Multi-tenant: Enforced at service level via company context
  */
 @RestController
-@RequestMapping("/api/users")
+@RequestMapping("/users")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Users", description = "User management, authentication, and profile endpoints")

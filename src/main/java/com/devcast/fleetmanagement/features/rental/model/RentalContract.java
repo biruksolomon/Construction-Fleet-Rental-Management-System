@@ -1,11 +1,14 @@
 package com.devcast.fleetmanagement.features.rental.model;
 
 import com.devcast.fleetmanagement.features.company.model.Client;
+import com.devcast.fleetmanagement.features.company.model.Company;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonManagedReference;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
+
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -25,10 +28,14 @@ public class RentalContract {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "company_id", nullable = false)
-    private com.devcast.fleetmanagement.features.company.model.Company company;
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    @Schema(hidden = true)
+    private Company company;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "client_id", nullable = false)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    @Schema(hidden = true)
     private Client client;
 
     @Column(nullable = false, length = 50)
@@ -73,6 +80,7 @@ public class RentalContract {
     private Long version;
 
     @OneToMany(mappedBy = "rentalContract", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonManagedReference
     @Builder.Default
     private List<RentalVehicle> rentalVehicles = new ArrayList<>();
 
@@ -144,7 +152,7 @@ public class RentalContract {
     }
 
     /**
-     *  Validate status transition
+     * Validate status transition
      * Enforce valid state transitions only
      */
     public boolean canTransitionTo(RentalStatus newStatus) {
@@ -169,7 +177,7 @@ public class RentalContract {
     }
 
     /**
-     *  Transition to new status with validation
+     *: Transition to new status with validation
      */
     public void transitionTo(RentalStatus newStatus) {
         if (!canTransitionTo(newStatus)) {
