@@ -142,4 +142,41 @@ public class RentalContract {
         OVERDUE,      // Exceeded end date
         CANCELLED     // Cancelled before completion
     }
+
+    /**
+     *  Validate status transition
+     * Enforce valid state transitions only
+     */
+    public boolean canTransitionTo(RentalStatus newStatus) {
+        if (this.status == newStatus) {
+            return true; // Same status is allowed
+        }
+
+        switch (this.status) {
+            case PENDING:
+                return newStatus == RentalStatus.ACTIVE || newStatus == RentalStatus.CANCELLED;
+            case ACTIVE:
+                return newStatus == RentalStatus.COMPLETED ||
+                        newStatus == RentalStatus.OVERDUE ||
+                        newStatus == RentalStatus.CANCELLED;
+            case COMPLETED:
+            case CANCELLED:
+            case OVERDUE:
+                return false; // Terminal states cannot transition
+            default:
+                return false;
+        }
+    }
+
+    /**
+     *  Transition to new status with validation
+     */
+    public void transitionTo(RentalStatus newStatus) {
+        if (!canTransitionTo(newStatus)) {
+            throw new IllegalStateException(
+                    String.format("Invalid status transition from %s to %s", this.status, newStatus)
+            );
+        }
+        this.status = newStatus;
+    }
 }
