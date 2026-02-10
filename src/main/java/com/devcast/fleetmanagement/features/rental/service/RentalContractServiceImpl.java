@@ -4,12 +4,14 @@ import com.devcast.fleetmanagement.features.audit.service.AuditService;
 import com.devcast.fleetmanagement.features.company.model.Client;
 import com.devcast.fleetmanagement.features.company.repository.ClientRepository;
 import com.devcast.fleetmanagement.features.company.repository.CompanyRepository;
+import com.devcast.fleetmanagement.features.driver.model.Driver;
 import com.devcast.fleetmanagement.features.driver.repository.DriverRepository;
 import com.devcast.fleetmanagement.features.invoice.model.Invoice;
 import com.devcast.fleetmanagement.features.invoice.repository.InvoiceRepository;
 import com.devcast.fleetmanagement.features.rental.model.RentalContract;
 import com.devcast.fleetmanagement.features.rental.model.RentalVehicle;
 import com.devcast.fleetmanagement.features.rental.repository.RentalContractRepository;
+import com.devcast.fleetmanagement.features.rental.repository.RentalVehicleRepository;
 import com.devcast.fleetmanagement.features.user.model.util.Permission;
 import com.devcast.fleetmanagement.features.vehicle.model.Vehicle;
 import com.devcast.fleetmanagement.features.vehicle.repository.VehicleRepository;
@@ -43,6 +45,7 @@ public class RentalContractServiceImpl implements RentalContractService {
     private final VehicleRepository vehicleRepository;
     private final DriverRepository driverRepository;
     private final InvoiceRepository invoiceRepository;
+    private final RentalVehicleRepository rentalVehicleRepository;
     private final AuditService auditService;
 
     // ==================== Contract CRUD Operations ====================
@@ -52,7 +55,7 @@ public class RentalContractServiceImpl implements RentalContractService {
     public RentalContract createContract(Long companyId, RentalContract contract) {
         log.info("Creating rental contract for company: {}", companyId);
 
-        // Verify permissions
+        // PHASE 1: Multi-tenant isolation
         verifyPermission(Permission.CREATE_RENTAL);
         verifyCompanyAccess(companyId);
 
@@ -60,16 +63,27 @@ public class RentalContractServiceImpl implements RentalContractService {
         var company = companyRepository.findById(companyId)
                 .orElseThrow(() -> new IllegalArgumentException("Company not found"));
 
-        // Validate client exists
+        // Validate client exists and belongs to same company
         var client = clientRepository.findById(contract.getClient().getId())
                 .orElseThrow(() -> new IllegalArgumentException("Client not found"));
+
+        if (!client.getCompany().getId().equals(companyId)) {
+            throw new SecurityException("Client does not belong to this company");
+        }
+
+        // PHASE 2: Date validation
+        contract.validateDates();
+        if (contract.getEndDate().isBefore(contract.getStartDate()) ||
+                contract.getEndDate().equals(contract.getStartDate())) {
+            throw new IllegalArgumentException("End date must be after start date");
+        }
 
         // Generate unique contract number
         String contractNumber = generateContractNumber(companyId);
         contract.setContractNumber(contractNumber);
         contract.setCompany(company);
         contract.setClient(client);
-        contract.setStatus(RentalContract.RentalStatus.ACTIVE);
+        contract.setStatus(RentalContract.RentalStatus.PENDING); // Start as PENDING
 
         RentalContract saved = rentalContractRepository.save(contract);
 
@@ -138,7 +152,14 @@ public class RentalContractServiceImpl implements RentalContractService {
 
         verifyCompanyAccess(contract.getCompany().getId());
 
-        contract.setStatus(RentalContract.RentalStatus.CANCELLED);
+        // PHASE 2: Validate status transition - cannot cancel if already COMPLETED
+        if (contract.getStatus() == RentalContract.RentalStatus.COMPLETED) {
+            throw new IllegalStateException("Cannot cancel a COMPLETED rental");
+        }
+
+        // Transition to CANCELLED status
+        contract.transitionTo(RentalContract.RentalStatus.CANCELLED);
+        contract.setCancellationReason(reason);
         rentalContractRepository.save(contract);
 
         auditService.logAuditEvent(contract.getCompany().getId(), "RENTAL_CONTRACT_CANCELLED",
@@ -195,7 +216,9 @@ public class RentalContractServiceImpl implements RentalContractService {
                 .orElseThrow(() -> new IllegalArgumentException("Contract not found"));
 
         verifyCompanyAccess(contract.getCompany().getId());
-        contract.setStatus(RentalContract.RentalStatus.ACTIVE);
+
+        // PHASE 2: Validate status transition - only PENDING can transition to ACTIVE
+        contract.transitionTo(RentalContract.RentalStatus.ACTIVE);
 
         // Update vehicle status to RENTED
         for (RentalVehicle rv : contract.getRentalVehicles()) {
@@ -217,7 +240,15 @@ public class RentalContractServiceImpl implements RentalContractService {
                 .orElseThrow(() -> new IllegalArgumentException("Contract not found"));
 
         verifyCompanyAccess(contract.getCompany().getId());
-        contract.setStatus(RentalContract.RentalStatus.COMPLETED);
+
+        // PHASE 2: Validate status transition - only ACTIVE or OVERDUE can be COMPLETED
+        if (contract.getStatus() != RentalContract.RentalStatus.ACTIVE &&
+                contract.getStatus() != RentalContract.RentalStatus.OVERDUE) {
+            throw new IllegalStateException("Can only complete ACTIVE or OVERDUE rentals");
+        }
+
+        contract.transitionTo(RentalContract.RentalStatus.COMPLETED);
+        contract.setActualEndDate(java.time.LocalDateTime.now());
 
         // Update vehicle status back to AVAILABLE
         for (RentalVehicle rv : contract.getRentalVehicles()) {
@@ -271,14 +302,36 @@ public class RentalContractServiceImpl implements RentalContractService {
         var vehicle = vehicleRepository.findById(vehicleId)
                 .orElseThrow(() -> new IllegalArgumentException("Vehicle not found"));
 
+        // PHASE 1: Multi-tenant isolation
         verifyCompanyAccess(contract.getCompany().getId());
         verifyCompanyAccess(vehicle.getCompany().getId());
+
+        if (!vehicle.getCompany().getId().equals(contract.getCompany().getId())) {
+            throw new SecurityException("Vehicle does not belong to the same company as contract");
+        }
+
+        // PHASE 3: Double booking prevention - check for overlapping rentals
+        long overlaps = rentalVehicleRepository.countOverlappingVehicleRentals(
+                contract.getCompany().getId(),
+                vehicleId,
+                contract.getStartDate(),
+                contract.getEndDate(),
+                contractId
+        );
+
+        if (overlaps > 0) {
+            throw new IllegalStateException(
+                    String.format("Vehicle %d already has an overlapping rental for period %s to %s",
+                            vehicleId, contract.getStartDate(), contract.getEndDate())
+            );
+        }
 
         if (vehicle.getStatus() != Vehicle.VehicleStatus.AVAILABLE) {
             throw new IllegalStateException("Vehicle is not available for rental");
         }
 
         RentalVehicle rentalVehicle = RentalVehicle.builder()
+                .company(contract.getCompany())
                 .rentalContract(contract)
                 .vehicle(vehicle)
                 .agreedRate(vehicle.getDailyRate())
@@ -288,7 +341,8 @@ public class RentalContractServiceImpl implements RentalContractService {
         rentalContractRepository.save(contract);
 
         auditService.logAuditEvent(contract.getCompany().getId(), "RENTAL_VEHICLE_ADDED",
-                "RentalVehicle", rentalVehicle.getId(), "Vehicle added to rental");
+                "RentalVehicle", rentalVehicle.getId(),
+                String.format("Vehicle %s added to rental %s", vehicle.getPlateNumber(), contract.getContractNumber()));
 
         return rentalVehicle;
     }
@@ -310,21 +364,98 @@ public class RentalContractServiceImpl implements RentalContractService {
 
         verifyPermission(Permission.UPDATE_RENTAL);
 
-        // This would need a RentalVehicleRepository to properly implement
-        // For now, we'll document the approach
-        throw new UnsupportedOperationException("Requires RentalVehicleRepository implementation");
+        RentalVehicle rentalVehicle = rentalVehicleRepository.findById(rentalVehicleId)
+                .orElseThrow(() -> new IllegalArgumentException("Rental vehicle not found"));
+
+        verifyCompanyAccess(rentalVehicle.getCompany().getId());
+
+        rentalVehicleRepository.delete(rentalVehicle);
+
+        auditService.logAuditEvent(rentalVehicle.getCompany().getId(), "RENTAL_VEHICLE_REMOVED",
+                "RentalVehicle", rentalVehicleId, "Vehicle removed from rental");
     }
 
     @Override
     @Transactional
     public RentalVehicle updateVehicleTerms(Long rentalVehicleId, RentalVehicle vehicle) {
-        throw new UnsupportedOperationException("Requires RentalVehicleRepository implementation");
+        RentalVehicle existing = rentalVehicleRepository.findById(rentalVehicleId)
+                .orElseThrow(() -> new IllegalArgumentException("Rental vehicle not found"));
+
+        verifyCompanyAccess(existing.getCompany().getId());
+
+        if (vehicle.getAgreedRate() != null) {
+            existing.setAgreedRate(vehicle.getAgreedRate());
+        }
+
+        return rentalVehicleRepository.save(existing);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Optional<RentalVehicle> getRentalVehicle(Long rentalVehicleId) {
-        throw new UnsupportedOperationException("Requires RentalVehicleRepository implementation");
+        return rentalVehicleRepository.findById(rentalVehicleId)
+                .map(rv -> {
+                    verifyCompanyAccess(rv.getCompany().getId());
+                    return rv;
+                });
+    }
+
+    /**
+     * PHASE 3 & 4: Assign driver to rental vehicle with double-booking prevention
+     */
+    @Transactional
+    public void assignDriverToRentalVehicle(Long rentalVehicleId, Long driverId) {
+        log.info("Assigning driver {} to rental vehicle {}", driverId, rentalVehicleId);
+
+        RentalVehicle rentalVehicle = rentalVehicleRepository.findById(rentalVehicleId)
+                .orElseThrow(() -> new IllegalArgumentException("Rental vehicle not found"));
+
+        Driver driver = driverRepository.findById(driverId)
+                .orElseThrow(() -> new IllegalArgumentException("Driver not found"));
+
+        // PHASE 1: Multi-tenant isolation
+        verifyCompanyAccess(rentalVehicle.getCompany().getId());
+        verifyCompanyAccess(driver.getCompany().getId());
+
+        if (!driver.getCompany().getId().equals(rentalVehicle.getCompany().getId())) {
+            throw new SecurityException("Driver does not belong to the same company");
+        }
+
+        // PHASE 4: Driver status validation
+        if (driver.getStatus() == Driver.DriverStatus.SUSPENDED) {
+            throw new IllegalStateException("Cannot assign SUSPENDED driver to rental");
+        }
+
+        if (driver.getStatus() == Driver.DriverStatus.INACTIVE) {
+            throw new IllegalStateException("Cannot assign INACTIVE driver to rental");
+        }
+
+        // PHASE 3: Double booking prevention - check for overlapping driver assignments
+        RentalContract contract = rentalVehicle.getRentalContract();
+        long overlaps = rentalVehicleRepository.countOverlappingDriverAssignments(
+                driver.getCompany().getId(),
+                driverId,
+                contract.getStartDate(),
+                contract.getEndDate(),
+                contract.getId()
+        );
+
+        if (overlaps > 0) {
+            throw new IllegalStateException(
+                    String.format("Driver %d already has an overlapping assignment for period %s to %s",
+                            driverId, contract.getStartDate(), contract.getEndDate())
+            );
+        }
+
+        // Assign driver
+        rentalVehicle.setDriver(driver);
+        rentalVehicleRepository.save(rentalVehicle);
+
+        auditService.logAuditEvent(driver.getCompany().getId(), "DRIVER_ASSIGNED_TO_RENTAL",
+                "RentalVehicle", rentalVehicleId,
+                String.format("Driver %s assigned to rental vehicle", driver.getUser().getFullName()));
+
+        log.info("Driver {} successfully assigned to rental vehicle {}", driverId, rentalVehicleId);
     }
 
     // ==================== Pricing & Cost Calculation ====================

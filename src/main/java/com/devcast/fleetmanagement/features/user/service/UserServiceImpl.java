@@ -134,10 +134,30 @@ public class UserServiceImpl implements UserService {
         }
 
         if (request.getRole() != null) {
-            // Only OWNER or ADMIN can change roles
+            // PHASE 5: Enhanced role change validation with privilege escalation prevention
             if (!SecurityUtils.hasPermission(Permission.MANAGE_USER_ROLES)) {
                 throw new SecurityException("Only administrators can change user roles");
             }
+
+            // Get current logged-in user
+            String currentUserEmail = SecurityUtils.getCurrentUserEmail();
+            User currentUser = userRepository.findByCompanyIdAndEmail(existing.getCompany().getId(), currentUserEmail)
+                    .orElseThrow(() -> new SecurityException("Current user not found"));
+
+            // Prevent escalation: cannot assign role higher than your own
+            if (isRoleHigherThan(request.getRole(), currentUser.getRole())) {
+                throw new SecurityException(String.format(
+                        "Cannot assign role %s - you can only assign roles equal to or lower than your own (%s)",
+                        request.getRole(), currentUser.getRole()));
+            }
+
+            // Prevent modification of higher-privileged users
+            if (isRoleHigherThan(existing.getRole(), currentUser.getRole())) {
+                throw new SecurityException(String.format(
+                        "Cannot modify user with role %s - target user has higher privileges than you (%s)",
+                        existing.getRole(), currentUser.getRole()));
+            }
+
             existing.setRole(request.getRole());
         }
 
@@ -205,15 +225,67 @@ public class UserServiceImpl implements UserService {
 
         verifyUserAccess(userId);
 
+        // PHASE 5: Privilege escalation prevention
+        // Get current logged-in user
+        String currentUserEmail = SecurityUtils.getCurrentUserEmail();
+        User currentUser = userRepository.findByCompanyIdAndEmail(user.getCompany().getId(), currentUserEmail)
+                .orElseThrow(() -> new SecurityException("Current user not found"));
+
+        // Prevent escalation: users cannot grant roles higher than their own
+        if (isRoleHigherThan(request.getNewRole(), currentUser.getRole())) {
+            throw new SecurityException(String.format(
+                    "Cannot assign role %s - you can only assign roles equal to or lower than your own (%s)",
+                    request.getNewRole(), currentUser.getRole()));
+        }
+
+        // Prevent modification of higher-privileged users
+        if (isRoleHigherThan(user.getRole(), currentUser.getRole())) {
+            throw new SecurityException(String.format(
+                    "Cannot modify user with role %s - target user has higher privileges than you (%s)",
+                    user.getRole(), currentUser.getRole()));
+        }
+
+        // OWNERS cannot be modified except by other OWNERS
+        if (user.getRole() == Role.OWNER && currentUser.getRole() != Role.OWNER) {
+            throw new SecurityException("Only OWNER can modify another OWNER's role");
+        }
+
+        // Prevent self-demotion from OWNER role (last line of defense)
+        if (user.getId().equals(currentUser.getId()) &&
+                currentUser.getRole() == Role.OWNER &&
+                request.getNewRole() != Role.OWNER) {
+            throw new SecurityException("OWNER cannot demote themselves");
+        }
+
         user.setRole(request.getNewRole());
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
 
         String details = "Role assigned to " + user.getEmail() + ": " + request.getNewRole() +
+                " by " + currentUser.getEmail() +
                 (request.getReason() != null ? " Reason: " + request.getReason() : "");
         auditLog(user.getCompany().getId(), "ROLE_ASSIGNED", details, user.getId());
 
-        log.info("Role assigned to user {}: {}", userId, request.getNewRole());
+        log.info("Role assigned to user {} by {}: {}", userId, currentUser.getId(), request.getNewRole());
+    }
+
+    /**
+     * PHASE 5: Determine if one role is higher than another
+     * Hierarchy: OWNER > ADMIN > FLEET_MANAGER > ACCOUNTANT > DRIVER
+     */
+    private boolean isRoleHigherThan(Role role1, Role role2) {
+        return getRoleLevel(role1) > getRoleLevel(role2);
+    }
+
+    private int getRoleLevel(Role role) {
+        switch (role) {
+            case OWNER:         return 5;
+            case ADMIN:         return 4;
+            case FLEET_MANAGER: return 3;
+            case ACCOUNTANT:    return 2;
+            case DRIVER:        return 1;
+            default:            return 0;
+        }
     }
 
     @Override

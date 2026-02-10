@@ -85,4 +85,25 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
         LocalDateTime cutoffDate = LocalDateTime.now().minusDays(days);
         deleteDeletedRentalsOlderThan(cutoffDate);
     }
+
+    /**
+     * PHASE 6: Scheduled Job Support - Find pending rentals ready to activate
+     */
+    List<RentalContract> findByStatusAndStartDateLessThanEqual(
+            RentalContract.RentalStatus status,
+            LocalDate date
+    );
+
+    /**
+     * PHASE 6: Scheduled Job Support - Find active rentals that are overdue
+     */
+    List<RentalContract> findByStatusAndEndDateLessThan(
+            RentalContract.RentalStatus status,
+            LocalDate date
+    );
+
+    /**
+     * PHASE 6: Count rentals by status for reporting
+     */
+    long countByStatus(RentalContract.RentalStatus status);
 }
