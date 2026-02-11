@@ -4,6 +4,7 @@ import io.swagger.v3.oas.models.*;
 import io.swagger.v3.oas.models.info.*;
 import io.swagger.v3.oas.models.security.*;
 import io.swagger.v3.oas.models.servers.Server;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -11,9 +12,9 @@ import org.springframework.context.annotation.Configuration;
 import java.util.ArrayList;
 import java.util.List;
 
+@Slf4j
 @Configuration
 public class OpenApiConfig {
-
 
     @Value("${Application.version}")
     private String appVersion;
@@ -27,15 +28,11 @@ public class OpenApiConfig {
     @Value("${Application.base-url}")
     private String baseUrl;
 
-  /*  @Value("${app.ngrok-url:}")
-    private String ngrokUrl;*/
-
-
     @Bean
     public OpenAPI customOpenAPI() {
         List<Server> servers = new ArrayList<>();
 
-
+        log.info("init swagger");
         servers.add(new Server()
                 .url(baseUrl )
                 .description("Local Development Server"));

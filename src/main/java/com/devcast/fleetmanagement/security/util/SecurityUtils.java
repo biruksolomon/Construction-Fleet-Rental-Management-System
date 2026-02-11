@@ -19,56 +19,72 @@ public class SecurityUtils {
 
     /**
      * Get current authenticated user details
+     * Returns null if user is not authenticated
      */
     public static JwtAuthenticationFilter.JwtUserDetails getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.getDetails() instanceof JwtAuthenticationFilter.JwtUserDetails) {
             return (JwtAuthenticationFilter.JwtUserDetails) authentication.getDetails();
         }
-        throw new IllegalStateException("User not authenticated or JWT details not found");
+        return null;
     }
 
     /**
-     * Get current user's ID
+     * Get current user's ID, returns null if not authenticated
      */
     public static Long getCurrentUserId() {
-        return getCurrentUser().getUserId();
+        JwtAuthenticationFilter.JwtUserDetails user = getCurrentUser();
+        return user != null ? user.getUserId() : null;
     }
 
     /**
-     * Get current user's company ID
+     * Get current user's company ID, returns null if not authenticated
      */
     public static Long getCurrentCompanyId() {
-        return getCurrentUser().getCompanyId();
+        JwtAuthenticationFilter.JwtUserDetails user = getCurrentUser();
+        return user != null ? user.getCompanyId() : null;
     }
 
     /**
-     * Get current user's email
+     * Get current user's email, returns null if not authenticated
      */
     public static String getCurrentUserEmail() {
-        return getCurrentUser().getEmail();
+        JwtAuthenticationFilter.JwtUserDetails user = getCurrentUser();
+        return user != null ? user.getEmail() : null;
     }
 
     /**
-     * Get current user's role
+     * Get current user's role, returns null if not authenticated
      */
     public static Role getCurrentUserRole() {
-        String roleString = getCurrentUser().getRole();
+        JwtAuthenticationFilter.JwtUserDetails user = getCurrentUser();
+        if (user == null) {
+            return null;
+        }
+        String roleString = user.getRole();
         return Role.valueOf(roleString.replace("ROLE_", ""));
     }
 
     /**
      * Check if current user has specific permission
+     * Returns false if user is not authenticated
      */
     public static boolean hasPermission(Permission permission) {
         Role role = getCurrentUserRole();
+        if (role == null) {
+            return false;
+        }
         return RolePermissionMap.hasPermission(role, permission);
     }
 
     /**
      * Check if current user has any of the specified permissions
+     * Returns false if user is not authenticated
      */
     public static boolean hasAnyPermission(Permission... permissions) {
+        if (!isAuthenticated()) {
+            return false;
+        }
         for (Permission permission : permissions) {
             if (hasPermission(permission)) {
                 return true;
@@ -79,8 +95,12 @@ public class SecurityUtils {
 
     /**
      * Check if current user has all of the specified permissions
+     * Returns false if user is not authenticated
      */
     public static boolean hasAllPermissions(Permission... permissions) {
+        if (!isAuthenticated()) {
+            return false;
+        }
         for (Permission permission : permissions) {
             if (!hasPermission(permission)) {
                 return false;
@@ -91,16 +111,22 @@ public class SecurityUtils {
 
     /**
      * Check if current user has specific role
+     * Returns false if user is not authenticated
      */
     public static boolean hasRole(Role role) {
-        return getCurrentUserRole().equals(role);
+        Role currentRole = getCurrentUserRole();
+        return currentRole != null && currentRole.equals(role);
     }
 
     /**
      * Check if current user has any of the specified roles
+     * Returns false if user is not authenticated
      */
     public static boolean hasAnyRole(Role... roles) {
         Role currentRole = getCurrentUserRole();
+        if (currentRole == null) {
+            return false;
+        }
         for (Role role : roles) {
             if (role.equals(currentRole)) {
                 return true;
@@ -132,13 +158,16 @@ public class SecurityUtils {
 
     /**
      * Verify user has access to specific company (multi-tenant check)
+     * Returns false if user is not authenticated
      */
     public static boolean canAccessCompany(Long companyId) {
-        return getCurrentCompanyId().equals(companyId);
+        Long userCompanyId = getCurrentCompanyId();
+        return userCompanyId != null && userCompanyId.equals(companyId);
     }
 
     /**
      * Verify user has access to specific company (alias for canAccessCompany)
+     * Returns false if user is not authenticated
      */
     public static boolean hasCompanyAccess(Long companyId) {
         return canAccessCompany(companyId);

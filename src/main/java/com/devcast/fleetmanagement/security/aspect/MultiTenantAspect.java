@@ -18,10 +18,14 @@ import java.lang.reflect.Method;
 @Aspect
 @Component
 public class MultiTenantAspect {
-    private static final Logger logger = LoggerFactory.getLogger(MultiTenantAspect.class);
 
-    @Before("@annotation(com.devcast.fleetmanagement.security.annotation.MultiTenant)")
-    public void enforceMultiTenant(JoinPoint joinPoint, MultiTenant multiTenant) {
+    private static final Logger logger =
+            LoggerFactory.getLogger(MultiTenantAspect.class);
+
+    @Before("@annotation(multiTenant)")
+    public void enforceMultiTenant(JoinPoint joinPoint,
+                                   MultiTenant multiTenant) {
+
         try {
             String paramName = multiTenant.value();
             Object[] args = joinPoint.getArgs();

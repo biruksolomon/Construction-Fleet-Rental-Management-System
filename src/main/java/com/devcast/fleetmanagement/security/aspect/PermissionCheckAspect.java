@@ -19,10 +19,14 @@ import org.slf4j.LoggerFactory;
 @Aspect
 @Component
 public class PermissionCheckAspect {
-    private static final Logger logger = LoggerFactory.getLogger(PermissionCheckAspect.class);
 
-    @Before("@annotation(RequirePermission)")
-    public void checkPermission(JoinPoint joinPoint, RequirePermission requirePermission) {
+    private static final Logger logger =
+            LoggerFactory.getLogger(PermissionCheckAspect.class);
+
+    @Before("@annotation(requirePermission)")
+    public void checkPermission(JoinPoint joinPoint,
+                                RequirePermission requirePermission) {
+
         Permission requiredPermission = requirePermission.value();
 
         if (!SecurityUtils.hasPermission(requiredPermission)) {
@@ -33,7 +37,8 @@ public class PermissionCheckAspect {
                     className, methodName, requiredPermission.getCode());
 
             throw new AccessDeniedException(
-                    "Access denied: Missing required permission: " + requiredPermission.getDescription());
+                    "Access denied: Missing required permission: "
+                            + requiredPermission.getDescription());
         }
     }
 }

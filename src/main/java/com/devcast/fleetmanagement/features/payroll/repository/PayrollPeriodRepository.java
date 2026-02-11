@@ -27,8 +27,7 @@ public interface PayrollPeriodRepository extends JpaRepository<PayrollPeriod, Lo
     List<PayrollPeriod> findByCompanyIdAndStartDateGreaterThanEqualAndEndDateLessThanEqual(
             Long companyId, LocalDate startDate, LocalDate endDate);
     
-    @Query("SELECT pp FROM PayrollPeriod pp WHERE pp.company.id = :companyId AND pp.status = 'OPEN' LIMIT 1")
-    Optional<PayrollPeriod> getActivePayrollPeriod(@Param("companyId") Long companyId);
+
     
     @Query("SELECT pp FROM PayrollPeriod pp WHERE pp.company.id = :companyId ORDER BY pp.endDate DESC")
     List<PayrollPeriod> findLatestPeriods(@Param("companyId") Long companyId, Pageable pageable);

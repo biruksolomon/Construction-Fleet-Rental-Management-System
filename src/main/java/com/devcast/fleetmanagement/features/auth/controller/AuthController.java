@@ -55,8 +55,8 @@ public class AuthController {
     ) {
         try {
             AuthenticationResponse response = authenticationService.authenticate(
-                    request.email(),
-                    request.password()
+                    request.getEmail(),
+                    request.getPassword()
             );
             return ResponseEntity.ok(
                     ApiResponse.success(response, "Login successful")
@@ -120,7 +120,7 @@ public class AuthController {
             @Valid @RequestBody VerifyEmailRequest request
     ) {
         try {
-            authenticationService.verifyEmail(request.email(), request.code());
+            authenticationService.verifyEmail(request.getEmail(), request.getCode());
             return ResponseEntity.ok(
                     ApiResponse.success("Email verified successfully. You can now login.")
             );
@@ -151,7 +151,7 @@ public class AuthController {
             @Valid @RequestBody ResendVerificationRequest request
     ) {
         try {
-            authenticationService.resendVerificationCode(request.email());
+            authenticationService.resendVerificationCode(request.getEmail());
             return ResponseEntity.ok(
                     ApiResponse.success("Verification code sent to your email.")
             );
@@ -181,7 +181,7 @@ public class AuthController {
             @Valid @RequestBody RefreshTokenRequest request
     ) {
         try {
-            AuthenticationResponse response = authenticationService.refreshToken(request.refreshToken());
+            AuthenticationResponse response = authenticationService.refreshToken(request.getRefreshToken());
             return ResponseEntity.ok(
                     ApiResponse.success(response, "Token refreshed successfully")
             );
@@ -288,7 +288,7 @@ public class AuthController {
             @Valid @RequestBody PasswordResetRequest request
     ) {
         try {
-            authenticationService.requestPasswordReset(request.email());
+            authenticationService.requestPasswordReset(request.getEmail());
             return ResponseEntity.ok(
                     ApiResponse.success("If an account exists with that email, password reset instructions will be sent")
             );
@@ -324,12 +324,12 @@ public class AuthController {
     ) {
         try {
             // Validate passwords match
-            if (!request.newPassword().equals(request.confirmPassword())) {
+            if (!request.getNewPassword().equals(request.getConfirmPassword())) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body(ApiResponse.error("Passwords do not match"));
             }
 
-            authenticationService.resetPassword(request.email(), request.code(), request.newPassword());
+            authenticationService.resetPassword(request.getEmail(), request.getCode(), request.getNewPassword());
             return ResponseEntity.ok(
                     ApiResponse.success("Password reset successfully. You can now login with your new password.")
             );
@@ -360,7 +360,7 @@ public class AuthController {
             @Valid @RequestBody PasswordResetRequest request
     ) {
         try {
-            authenticationService.resendPasswordResetCode(request.email());
+            authenticationService.resendPasswordResetCode(request.getEmail());
             return ResponseEntity.ok(
                     ApiResponse.success("Password reset code sent to your email.")
             );
@@ -415,7 +415,7 @@ public class AuthController {
     public ResponseEntity<ApiResponse<Boolean>> validateToken(
             @RequestBody RefreshTokenRequest request
     ) {
-        boolean isValid = authenticationService.validateToken(request.refreshToken());
+        boolean isValid = authenticationService.validateToken(request.getRefreshToken());
         return ResponseEntity.ok(
                 ApiResponse.success(isValid, isValid ? "Token is valid" : "Token is invalid or expired")
         );

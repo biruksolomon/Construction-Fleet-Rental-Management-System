@@ -302,36 +302,36 @@ public class AuthenticationServiceImpl implements AuthenticationService {
      */
     @Override
     public void registerUser(RegistrationRequest request) {
-        log.info("Registering new user with email: {}", request.email());
+        log.info("Registering new user with email: {}", request.getEmail());
 
         // Validate input
-        if (request.email() == null || request.email().trim().isEmpty()) {
+        if (request.getEmail() == null || request.getEmail().trim().isEmpty()) {
             throw new IllegalArgumentException("Email is required");
         }
-        if (request.password() == null || request.password().isEmpty()) {
+        if (request.getPassword() == null || request.getPassword().isEmpty()) {
             throw new IllegalArgumentException("Password is required");
         }
-        if (request.fullName() == null || request.fullName().trim().isEmpty()) {
+        if (request.getFullName() == null || request.getFullName().trim().isEmpty()) {
             throw new IllegalArgumentException("Full name is required");
         }
-        if (request.companyId() == null || request.companyId() <= 0) {
+        if (request.getCompanyId() == null || request.getCompanyId() <= 0) {
             throw new IllegalArgumentException("Valid company ID is required");
         }
 
         // ENFORCE: Strong password policy
         try {
-            passwordPolicy.validatePassword(request.password());
+            passwordPolicy.validatePassword(request.getPassword());
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("Password does not meet security requirements: " + e.getMessage());
         }
 
         // Check email is not already registered
-        if (userRepository.findByEmail(request.email()).isPresent()) {
+        if (userRepository.findByEmail(request.getEmail()).isPresent()) {
             throw new IllegalArgumentException("Email is already registered");
         }
 
         // Verify company exists and is active
-        Company company = companyRepository.findById(request.companyId())
+        Company company = companyRepository.findById(request.getCompanyId())
                 .orElseThrow(() -> new IllegalArgumentException("Company not found"));
 
         if (company.getStatus() != Company.CompanyStatus.ACTIVE) {
@@ -339,33 +339,32 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         }
 
         // RBAC: Check if user has permission to create user
-        try {
-            com.devcast.fleetmanagement.security.util.SecurityUtils.getCurrentUser();
+        if (com.devcast.fleetmanagement.security.util.SecurityUtils.isAuthenticated()) {
             // User is authenticated - check permissions
             if (!com.devcast.fleetmanagement.security.util.SecurityUtils.hasPermission(
                     com.devcast.fleetmanagement.features.user.model.util.Permission.CREATE_USER)) {
                 throw new IllegalArgumentException("You do not have permission to register users");
             }
             // Verify multi-tenant access
-            if (!com.devcast.fleetmanagement.security.util.SecurityUtils.canAccessCompany(request.companyId())) {
+            if (!com.devcast.fleetmanagement.security.util.SecurityUtils.canAccessCompany(request.getCompanyId())) {
                 throw new IllegalArgumentException("You can only register users in your own company");
             }
-        } catch (IllegalStateException e) {
+        } else {
             // User not authenticated - allow self-registration only if first user
-            long companyUserCount = userRepository.countByCompanyId(request.companyId());
+            long companyUserCount = userRepository.countByCompanyId(request.getCompanyId());
             if (companyUserCount > 0) {
                 throw new IllegalArgumentException("Registration is disabled. Please contact your administrator.");
             }
         }
 
         // Hash password
-        String passwordHash = passwordEncoder.encode(request.password());
+        String passwordHash = passwordEncoder.encode(request.getPassword());
 
         // Create new user with INACTIVE status until email verification
         User user = User.builder()
                 .company(company)
-                .email(request.email())
-                .fullName(request.fullName())
+                .email(request.getEmail())
+                .fullName(request.getFullName())
                 .passwordHash(passwordHash)
                 .role(Role.DRIVER)
                 .status(User.UserStatus.INACTIVE)  // INACTIVE until email verified
@@ -380,14 +379,14 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         // Generate and send verification code
         String verificationCode = generateVerificationCode();
         EmailVerificationCode emailCode = EmailVerificationCode.builder()
-                .email(request.email())
+                .email(request.getEmail())
                 .code(verificationCode)
                 .build();
         emailVerificationCodeRepository.save(emailCode);
 
         // Send verification email
-        emailService.sendVerificationCode(request.email(), verificationCode);
-        log.info("Verification code sent to: {}", request.email());
+        emailService.sendVerificationCode(request.getEmail(), verificationCode);
+        log.info("Verification code sent to: {}", request.getEmail());
     }
 
     /**
