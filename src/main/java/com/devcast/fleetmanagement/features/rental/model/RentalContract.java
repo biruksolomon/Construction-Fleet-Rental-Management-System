@@ -3,7 +3,6 @@ package com.devcast.fleetmanagement.features.rental.model;
 import com.devcast.fleetmanagement.features.company.model.Client;
 import com.devcast.fleetmanagement.features.company.model.Company;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonManagedReference;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.*;
 import lombok.*;
@@ -80,7 +79,8 @@ public class RentalContract {
     private Long version;
 
     @OneToMany(mappedBy = "rentalContract", cascade = CascadeType.ALL, orphanRemoval = true)
-    @JsonManagedReference
+    @JsonIgnoreProperties("rentalContract")
+    @Schema(hidden = true)
     @Builder.Default
     private List<RentalVehicle> rentalVehicles = new ArrayList<>();
 

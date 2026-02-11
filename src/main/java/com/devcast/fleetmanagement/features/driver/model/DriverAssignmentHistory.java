@@ -2,6 +2,8 @@ package com.devcast.fleetmanagement.features.driver.model;
 
 import com.devcast.fleetmanagement.features.company.model.Company;
 import com.devcast.fleetmanagement.features.rental.model.RentalContract;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -33,14 +35,20 @@ public class DriverAssignmentHistory {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "company_id", nullable = false)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    @Schema(hidden = true)
     private Company company;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "driver_id", nullable = false)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    @Schema(hidden = true)
     private Driver driver;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "rental_contract_id", nullable = false)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    @Schema(hidden = true)
     private RentalContract rentalContract;
 
     @Enumerated(EnumType.STRING)

@@ -1,6 +1,8 @@
 package com.devcast.fleetmanagement.features.fuel.model;
 
 import com.devcast.fleetmanagement.features.vehicle.model.Vehicle;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -22,6 +24,8 @@ public class FuelAnalysis {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "vehicle_id", nullable = false)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    @Schema(hidden = true)
     private Vehicle vehicle;
 
     @Column(nullable = false, precision = 10, scale = 2)

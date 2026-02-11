@@ -3,7 +3,7 @@ package com.devcast.fleetmanagement.features.rental.model;
 import com.devcast.fleetmanagement.features.company.model.Company;
 import com.devcast.fleetmanagement.features.driver.model.Driver;
 import com.devcast.fleetmanagement.features.vehicle.model.Vehicle;
-import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -38,7 +38,7 @@ public class RentalVehicle {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "rental_contract_id", nullable = false)
-    @JsonBackReference
+    @JsonIgnoreProperties("rentalVehicles")
     @Schema(hidden = true)
     private RentalContract rentalContract;
 

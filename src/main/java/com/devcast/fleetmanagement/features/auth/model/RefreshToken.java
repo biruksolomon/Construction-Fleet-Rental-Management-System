@@ -1,6 +1,8 @@
 package com.devcast.fleetmanagement.features.auth.model;
 
 import com.devcast.fleetmanagement.features.user.model.User;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -55,6 +57,8 @@ public class RefreshToken {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_token_id")
+    @JsonIgnoreProperties("parentToken")
+    @Schema(hidden = true)
     private RefreshToken parentToken;
 
     @Column(nullable = false, updatable = false)

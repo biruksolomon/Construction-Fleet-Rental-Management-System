@@ -1,6 +1,8 @@
 package com.devcast.fleetmanagement.features.payroll.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -23,12 +25,14 @@ public class PayrollRecord {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "driver_id", nullable = false)
-    @JsonIgnore
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    @Schema(hidden = true)
     private com.devcast.fleetmanagement.features.driver.model.Driver driver;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "payroll_period_id", nullable = false)
-    @JsonIgnore
+    @JsonIgnoreProperties("payrollRecords")
+    @Schema(hidden = true)
     private PayrollPeriod payrollPeriod;
 
     @Column(nullable = false)

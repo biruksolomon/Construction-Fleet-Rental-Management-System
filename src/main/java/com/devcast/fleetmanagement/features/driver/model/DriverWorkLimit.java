@@ -1,5 +1,7 @@
 package com.devcast.fleetmanagement.features.driver.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -20,6 +22,8 @@ public class DriverWorkLimit {
 
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "driver_id", nullable = false)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    @Schema(hidden = true)
     private Driver driver;
 
     @Column(nullable = false)
