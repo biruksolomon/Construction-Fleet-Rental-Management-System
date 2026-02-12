@@ -32,10 +32,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String BEARER_PREFIX = "Bearer ";
 
     /**
-     * Endpoints that should NOT be filtered by JWT
+     * Endpoints that should NOT be filtered by JWT.
+     * NOTE: /auth/me, /auth/context, /auth/logout require a valid token
+     * so they are NOT excluded here. Only public auth endpoints are excluded.
      */
     private static final List<String> EXCLUDED_PATHS = List.of(
-            "/auth/**",
+            "/auth/login",
+            "/auth/register",
+            "/auth/refresh-token",
+            "/auth/verify-email",
+            "/auth/resend-verification",
+            "/auth/request-password-reset",
+            "/auth/confirm-password-reset",
+            "/auth/resend-password-reset",
+            "/auth/validate-reset-code",
+            "/auth/validate-token",
             "/public/**",
             "/swagger-ui/**",
             "/v3/api-docs/**",
@@ -69,9 +80,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 Long userId = jwtTokenProvider.getUserIdFromJwt(token);
                 Long companyId = jwtTokenProvider.getCompanyIdFromJwt(token);
 
-                // IMPORTANT: Spring expects ROLE_ prefix for hasRole()
+                // Role from JWT already has ROLE_ prefix (e.g. "ROLE_OWNER")
+                // Only add ROLE_ prefix if it's not already there
+                String authorityString = role.startsWith("ROLE_") ? role : "ROLE_" + role;
                 SimpleGrantedAuthority authority =
-                        new SimpleGrantedAuthority("ROLE_" + role);
+                        new SimpleGrantedAuthority(authorityString);
 
                 UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(

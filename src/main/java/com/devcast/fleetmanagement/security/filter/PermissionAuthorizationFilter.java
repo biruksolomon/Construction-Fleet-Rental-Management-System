@@ -31,41 +31,41 @@ public class PermissionAuthorizationFilter extends OncePerRequestFilter {
     private static final Map<String, Permission> ENDPOINT_PERMISSION_MAP = new HashMap<>();
 
     static {
-        // User Management
-        ENDPOINT_PERMISSION_MAP.put("POST:/api/users", Permission.CREATE_USER);
-        ENDPOINT_PERMISSION_MAP.put("GET:/api/users", Permission.READ_USER);
-        ENDPOINT_PERMISSION_MAP.put("PUT:/api/users/.*", Permission.UPDATE_USER);
-        ENDPOINT_PERMISSION_MAP.put("DELETE:/api/users/.*", Permission.DELETE_USER);
+        // User Management (path: /users)
+        ENDPOINT_PERMISSION_MAP.put("POST:/users", Permission.CREATE_USER);
+        ENDPOINT_PERMISSION_MAP.put("GET:/users", Permission.READ_USER);
+        ENDPOINT_PERMISSION_MAP.put("PUT:/users/.*", Permission.UPDATE_USER);
+        ENDPOINT_PERMISSION_MAP.put("DELETE:/users/.*", Permission.DELETE_USER);
 
-        // Vehicle Management
-        ENDPOINT_PERMISSION_MAP.put("POST:/api/vehicles", Permission.CREATE_VEHICLE);
-        ENDPOINT_PERMISSION_MAP.put("GET:/api/vehicles", Permission.READ_VEHICLE);
-        ENDPOINT_PERMISSION_MAP.put("PUT:/api/vehicles/.*", Permission.UPDATE_VEHICLE);
-        ENDPOINT_PERMISSION_MAP.put("DELETE:/api/vehicles/.*", Permission.DELETE_VEHICLE);
+        // Vehicle Management (path: /v1/vehicles)
+        ENDPOINT_PERMISSION_MAP.put("POST:/v1/vehicles", Permission.CREATE_VEHICLE);
+        ENDPOINT_PERMISSION_MAP.put("GET:/v1/vehicles", Permission.READ_VEHICLE);
+        ENDPOINT_PERMISSION_MAP.put("PUT:/v1/vehicles/.*", Permission.UPDATE_VEHICLE);
+        ENDPOINT_PERMISSION_MAP.put("DELETE:/v1/vehicles/.*", Permission.DELETE_VEHICLE);
 
-        // Driver Management
-        ENDPOINT_PERMISSION_MAP.put("POST:/api/drivers", Permission.CREATE_DRIVER);
-        ENDPOINT_PERMISSION_MAP.put("GET:/api/drivers", Permission.READ_DRIVER);
-        ENDPOINT_PERMISSION_MAP.put("PUT:/api/drivers/.*", Permission.UPDATE_DRIVER);
-        ENDPOINT_PERMISSION_MAP.put("DELETE:/api/drivers/.*", Permission.DELETE_DRIVER);
+        // Driver Management (path: /drivers)
+        ENDPOINT_PERMISSION_MAP.put("POST:/drivers", Permission.CREATE_DRIVER);
+        ENDPOINT_PERMISSION_MAP.put("GET:/drivers", Permission.READ_DRIVER);
+        ENDPOINT_PERMISSION_MAP.put("PUT:/drivers/.*", Permission.UPDATE_DRIVER);
+        ENDPOINT_PERMISSION_MAP.put("DELETE:/drivers/.*", Permission.DELETE_DRIVER);
 
-        // Rental Management
-        ENDPOINT_PERMISSION_MAP.put("POST:/api/rentals", Permission.CREATE_RENTAL);
-        ENDPOINT_PERMISSION_MAP.put("GET:/api/rentals", Permission.READ_RENTAL);
-        ENDPOINT_PERMISSION_MAP.put("PUT:/api/rentals/.*", Permission.UPDATE_RENTAL);
-        ENDPOINT_PERMISSION_MAP.put("DELETE:/api/rentals/.*", Permission.DELETE_RENTAL);
+        // Rental Management (path: /v1/rentals)
+        ENDPOINT_PERMISSION_MAP.put("POST:/v1/rentals", Permission.CREATE_RENTAL);
+        ENDPOINT_PERMISSION_MAP.put("GET:/v1/rentals", Permission.READ_RENTAL);
+        ENDPOINT_PERMISSION_MAP.put("PUT:/v1/rentals/.*", Permission.UPDATE_RENTAL);
+        ENDPOINT_PERMISSION_MAP.put("DELETE:/v1/rentals/.*", Permission.DELETE_RENTAL);
 
-        // Invoicing
-        ENDPOINT_PERMISSION_MAP.put("POST:/api/invoices", Permission.CREATE_INVOICE);
-        ENDPOINT_PERMISSION_MAP.put("GET:/api/invoices", Permission.READ_INVOICE);
-        ENDPOINT_PERMISSION_MAP.put("PUT:/api/invoices/.*", Permission.UPDATE_INVOICE);
-        ENDPOINT_PERMISSION_MAP.put("DELETE:/api/invoices/.*", Permission.DELETE_INVOICE);
+        // Invoicing (path: /invoices)
+        ENDPOINT_PERMISSION_MAP.put("POST:/invoices", Permission.CREATE_INVOICE);
+        ENDPOINT_PERMISSION_MAP.put("GET:/invoices", Permission.READ_INVOICE);
+        ENDPOINT_PERMISSION_MAP.put("PUT:/invoices/.*", Permission.UPDATE_INVOICE);
+        ENDPOINT_PERMISSION_MAP.put("DELETE:/invoices/.*", Permission.DELETE_INVOICE);
 
-        // Payroll
-        ENDPOINT_PERMISSION_MAP.put("POST:/api/payroll", Permission.CREATE_PAYROLL);
-        ENDPOINT_PERMISSION_MAP.put("GET:/api/payroll", Permission.READ_PAYROLL);
-        ENDPOINT_PERMISSION_MAP.put("PUT:/api/payroll/.*", Permission.UPDATE_PAYROLL);
-        ENDPOINT_PERMISSION_MAP.put("DELETE:/api/payroll/.*", Permission.DELETE_PAYROLL);
+        // Payroll (path: /payroll)
+        ENDPOINT_PERMISSION_MAP.put("POST:/payroll", Permission.CREATE_PAYROLL);
+        ENDPOINT_PERMISSION_MAP.put("GET:/payroll", Permission.READ_PAYROLL);
+        ENDPOINT_PERMISSION_MAP.put("PUT:/payroll/.*", Permission.UPDATE_PAYROLL);
+        ENDPOINT_PERMISSION_MAP.put("DELETE:/payroll/.*", Permission.DELETE_PAYROLL);
     }
 
     @Override
@@ -82,7 +82,9 @@ public class PermissionAuthorizationFilter extends OncePerRequestFilter {
 
             if (requiredPermission != null) {
                 String roleString = authentication.getAuthorities().iterator().next().getAuthority();
-                Role userRole = Role.valueOf(roleString.replace("ROLE_", ""));
+                // Strip ROLE_ prefix to get the enum name (e.g. "ROLE_OWNER" -> "OWNER")
+                String roleName = roleString.startsWith("ROLE_") ? roleString.substring(5) : roleString;
+                Role userRole = Role.valueOf(roleName);
 
                 if (!RolePermissionMap.hasPermission(userRole, requiredPermission)) {
                     logger.warn("Access denied for user with role: {} for permission: {}",
@@ -111,8 +113,15 @@ public class PermissionAuthorizationFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
-        // Skip filtering for public endpoints
+        // Skip filtering for public/auth endpoints, swagger, and health
         String path = request.getRequestURI();
-        return path.startsWith("/api/auth/") || path.startsWith("/api/public/") || path.startsWith("/api/swagger-ui/index.html");
+        return path.startsWith("/auth/")
+                || path.startsWith("/public/")
+                || path.startsWith("/swagger-ui")
+                || path.startsWith("/v3/api-docs")
+                || path.startsWith("/swagger-resources")
+                || path.startsWith("/webjars/")
+                || path.equals("/health")
+                || path.equals("/info");
     }
 }

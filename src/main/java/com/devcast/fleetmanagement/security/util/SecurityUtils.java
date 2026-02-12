@@ -62,7 +62,9 @@ public class SecurityUtils {
             return null;
         }
         String roleString = user.getRole();
-        return Role.valueOf(roleString.replace("ROLE_", ""));
+        // Strip ROLE_ prefix if present to get enum name (e.g. "ROLE_OWNER" -> "OWNER")
+        String roleName = roleString.startsWith("ROLE_") ? roleString.substring(5) : roleString;
+        return Role.valueOf(roleName);
     }
 
     /**
