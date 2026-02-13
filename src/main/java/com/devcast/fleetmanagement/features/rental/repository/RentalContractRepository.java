@@ -44,7 +44,7 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
             "rc.status IN ('PENDING', 'ACTIVE') AND " +
             "NOT (rc.endDate < :startDate OR rc.startDate > :endDate)")
     long countOverlappingRentals(@Param("companyId") Long companyId,
-                                 @Param("vehicleId") Long vehicleId,
+                                 @Param("vehicleId") LocalDate vehicleId,
                                  @Param("startDate") LocalDate startDate,
                                  @Param("endDate") LocalDate endDate);
 
@@ -58,7 +58,7 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
     long countOverlappingDriverRentals(@Param("companyId") Long companyId,
                                        @Param("driverId") Long driverId,
                                        @Param("startDate") LocalDate startDate,
-                                       @Param("endDate") LocalDate endDate);
+                                       @Param("endDate") Long endDate);
 
     /**
      * Count active rental contracts for a company
