@@ -528,7 +528,7 @@ public class VehicleServiceImpl implements VehicleService {
     @Override
     @Transactional(readOnly = true)
     public List<MaintenanceRecord> getPendingMaintenance(Long vehicleId) {
-        return maintenanceRecordRepository.findPendingByVehicleId(vehicleId,LocalDateTime.now());
+        return maintenanceRecordRepository.findPendingByVehicleId(vehicleId);
     }
 
     @Override

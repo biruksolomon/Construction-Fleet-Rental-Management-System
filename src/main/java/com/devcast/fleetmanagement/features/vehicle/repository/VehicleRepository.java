@@ -72,4 +72,10 @@ public interface VehicleRepository extends JpaRepository<Vehicle, Long> {
      */
     @Query("select v from Vehicle v where v.company.id = :companyId and v.status = 'AVAILABLE'")
     List<Vehicle> findAvailableByCompanyId(@Param("companyId") Long companyId);
+
+    /**
+     * Find vehicle by ID and company ID
+     */
+    @Query("select v from Vehicle v where v.id = :vehicleId and v.company.id = :companyId")
+    Optional<Vehicle> findByIdAndCompanyId(@Param("vehicleId") Long vehicleId, @Param("companyId") Long companyId);
 }

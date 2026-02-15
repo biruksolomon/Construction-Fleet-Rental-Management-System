@@ -196,4 +196,24 @@ public class SecurityUtils {
     public static String getCurrentUserRoleDisplayName() {
         return getCurrentUserRole().getDisplayName();
     }
+
+    /**
+     * Get current user's company ID (alias for getCurrentCompanyId)
+     * Used for multi-tenant operations
+     */
+    public static Long getCurrentUserCompanyId() {
+        return getCurrentCompanyId();
+    }
+
+    /**
+     * Validate user has access to company, throws exception if not
+     * Useful for operations that require company ownership validation
+     */
+    public static void validateCompanyAccess(Long companyId) {
+        if (!canAccessCompany(companyId)) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                "User does not have access to company: " + companyId
+            );
+        }
+    }
 }
