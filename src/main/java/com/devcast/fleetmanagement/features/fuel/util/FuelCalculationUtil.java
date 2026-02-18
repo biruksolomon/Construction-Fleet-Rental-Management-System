@@ -1,5 +1,7 @@
 package com.devcast.fleetmanagement.features.fuel.util;
 
+import org.springframework.stereotype.Component;
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
@@ -8,6 +10,7 @@ import java.util.List;
  * Fuel Calculation Utility
  * Provides helper methods for fuel consumption calculations and analysis
  */
+@Component
 public class FuelCalculationUtil {
 
     // Constants

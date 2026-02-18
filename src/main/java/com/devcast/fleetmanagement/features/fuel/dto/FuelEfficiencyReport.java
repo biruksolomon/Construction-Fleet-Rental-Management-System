@@ -10,9 +10,9 @@ import java.math.BigDecimal;
 public class FuelEfficiencyReport {
 
     private Long vehicleId;
-    private BigDecimal avgConsumption;
-    private BigDecimal bestConsumption;
-    private BigDecimal worstConsumption;
+    private BigDecimal totalConsumption;
+    private BigDecimal totalCost;
+    private BigDecimal efficiencyRating;
     private String trend;
     private String recommendation;
 }

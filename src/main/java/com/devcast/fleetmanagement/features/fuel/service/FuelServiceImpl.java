@@ -3,9 +3,13 @@ package com.devcast.fleetmanagement.features.fuel.service;
 import com.devcast.fleetmanagement.features.audit.service.AuditService;
 import com.devcast.fleetmanagement.features.company.repository.CompanyRepository;
 import com.devcast.fleetmanagement.features.fuel.dto.*;
+import com.devcast.fleetmanagement.features.fuel.exception.*;
 import com.devcast.fleetmanagement.features.fuel.model.FuelAnalysis;
 import com.devcast.fleetmanagement.features.fuel.model.FuelLog;
+import com.devcast.fleetmanagement.features.fuel.repository.FuelAnalysisRepository;
 import com.devcast.fleetmanagement.features.fuel.repository.FuelLogRepository;
+import com.devcast.fleetmanagement.features.fuel.util.FuelCalculationUtil;
+import com.devcast.fleetmanagement.features.fuel.util.FuelValidator;
 import com.devcast.fleetmanagement.features.user.model.util.Permission;
 import com.devcast.fleetmanagement.features.vehicle.model.Vehicle;
 import com.devcast.fleetmanagement.features.vehicle.repository.VehicleRepository;
@@ -27,10 +31,6 @@ import java.time.ZoneId;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * Fuel Service Implementation
- * Comprehensive fuel tracking, consumption analysis, and cost management
- */
 @Service
 @Slf4j
 @Transactional
@@ -38,14 +38,16 @@ import java.util.stream.Collectors;
 public class FuelServiceImpl implements FuelService {
 
     private final FuelLogRepository fuelLogRepository;
+    private final FuelAnalysisRepository fuelAnalysisRepository;
     private final VehicleRepository vehicleRepository;
     private final CompanyRepository companyRepository;
     private final AuditService auditService;
+    private final FuelCalculationUtil calculationUtil;
+    private final FuelValidator validator;
 
-    // Constants
-    private static final BigDecimal FUEL_ANOMALY_THRESHOLD = BigDecimal.valueOf(1.2); // 20% variance
-    private static final BigDecimal FUEL_SPIKE_THRESHOLD = BigDecimal.valueOf(1.5); // 50% increase
-    private static final BigDecimal THEFT_THRESHOLD = BigDecimal.valueOf(2.0); // 100% increase
+    private static final BigDecimal ANOMALY_THRESHOLD = BigDecimal.valueOf(1.2);
+    private static final BigDecimal SPIKE_THRESHOLD = BigDecimal.valueOf(1.5);
+    private static final BigDecimal THEFT_THRESHOLD = BigDecimal.valueOf(2.0);
 
     // ==================== Fuel Log Operations ====================
 
@@ -53,16 +55,15 @@ public class FuelServiceImpl implements FuelService {
     @Transactional
     @RequirePermission(Permission.CREATE_FUEL_LOG)
     public FuelLog logFuelEntry(Long vehicleId, FuelLog fuelLog) {
-        log.info("Logging fuel entry for vehicle: {}", vehicleId);
+        log.info("[FUEL] Logging fuel entry for vehicle: {}", vehicleId);
 
-        // Verify vehicle exists and get company context
         Vehicle vehicle = vehicleRepository.findById(vehicleId)
                 .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
 
         verifyCompanyAccess(vehicle.getCompany().getId());
+        validator.validateFuelLog(fuelLog);
 
-        // Build fuel log with vehicle association
-        FuelLog log = FuelLog.builder()
+        FuelLog entry = FuelLog.builder()
                 .vehicle(vehicle)
                 .refillDate(fuelLog.getRefillDate())
                 .liters(fuelLog.getLiters())
@@ -70,13 +71,10 @@ public class FuelServiceImpl implements FuelService {
                 .recordedBy(fuelLog.getRecordedBy() != null ? fuelLog.getRecordedBy() : FuelLog.RecordedBy.MANUAL)
                 .build();
 
-        FuelLog saved = fuelLogRepository.save(log);
-
+        FuelLog saved = fuelLogRepository.save(entry);
         auditService.logAuditEvent(vehicle.getCompany().getId(), "FUEL_LOG_CREATED",
-                "FuelLog", saved.getId(),
-                "Fuel refill logged: " + fuelLog.getLiters() + " liters for vehicle " + vehicleId);
+                "FuelLog", saved.getId(), "Fuel entry logged");
 
-        log.info("Fuel entry logged successfully for vehicle: {} (ID: {})", vehicleId, saved.getId());
         return saved;
     }
 
@@ -84,14 +82,9 @@ public class FuelServiceImpl implements FuelService {
     @Transactional(readOnly = true)
     @RequirePermission(Permission.READ_FUEL_LOG)
     public Page<FuelLog> getFuelLogs(Long vehicleId, Pageable pageable) {
-        log.debug("Retrieving fuel logs for vehicle: {}", vehicleId);
-
-        // Verify vehicle and company access
         Vehicle vehicle = vehicleRepository.findById(vehicleId)
-                .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
-
+                .orElseThrow(() -> new IllegalArgumentException("Vehicle not found"));
         verifyCompanyAccess(vehicle.getCompany().getId());
-
         return fuelLogRepository.findByVehicleId(vehicleId, pageable);
     }
 
@@ -99,76 +92,62 @@ public class FuelServiceImpl implements FuelService {
     @Transactional(readOnly = true)
     @RequirePermission(Permission.READ_FUEL_LOG)
     public List<FuelLog> getFuelLogsByPeriod(Long vehicleId, Long fromDate, Long toDate) {
-        log.debug("Retrieving fuel logs for vehicle: {} from {} to {}", vehicleId, fromDate, toDate);
-
-        // Verify vehicle and company access
         Vehicle vehicle = vehicleRepository.findById(vehicleId)
-                .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
-
+                .orElseThrow(() -> new IllegalArgumentException("Vehicle not found"));
         verifyCompanyAccess(vehicle.getCompany().getId());
 
-        LocalDate startDate = Instant.ofEpochMilli(fromDate).atZone(ZoneId.systemDefault()).toLocalDate();
-        LocalDate endDate = Instant.ofEpochMilli(toDate).atZone(ZoneId.systemDefault()).toLocalDate();
+        LocalDate from = Instant.ofEpochMilli(fromDate).atZone(ZoneId.systemDefault()).toLocalDate();
+        LocalDate to = Instant.ofEpochMilli(toDate).atZone(ZoneId.systemDefault()).toLocalDate();
 
-        return fuelLogRepository.findByVehicleIdAndDateRange(vehicleId, startDate, endDate);
+        return fuelLogRepository.findByVehicleIdAndRefillDateBetween(vehicleId, from, to);
     }
 
     @Override
     @Transactional
     @RequirePermission(Permission.UPDATE_FUEL_LOG)
-    public FuelLog updateFuelLog(Long logId, FuelLog fuelLog) {
-        log.info("Updating fuel log: {}", logId);
-
+    public FuelLog updateFuelLog(Long logId, FuelLog updates) {
         FuelLog existing = fuelLogRepository.findById(logId)
-                .orElseThrow(() -> new IllegalArgumentException("Fuel log not found: " + logId));
+                .orElseThrow(() -> new FuelLogNotFoundException("Fuel log not found"));
 
         verifyCompanyAccess(existing.getVehicle().getCompany().getId());
+        validator.validateFuelLog(updates);
 
-        existing.setLiters(fuelLog.getLiters());
-        existing.setCost(fuelLog.getCost());
-        existing.setRefillDate(fuelLog.getRefillDate());
-        existing.setRecordedBy(fuelLog.getRecordedBy());
+        existing.setRefillDate(updates.getRefillDate());
+        existing.setLiters(updates.getLiters());
+        existing.setCost(updates.getCost());
 
-        FuelLog updated = fuelLogRepository.save(existing);
+        FuelLog saved = fuelLogRepository.save(existing);
+        auditService.logAuditEvent(existing.getVehicle().getCompany().getId(),
+                "FUEL_LOG_UPDATED", "FuelLog", logId, "Fuel log updated");
 
-        auditService.logAuditEvent(existing.getVehicle().getCompany().getId(), "FUEL_LOG_UPDATED",
-                "FuelLog", updated.getId(), "Fuel log updated");
-
-        log.info("Fuel log updated successfully: {}", logId);
-        return updated;
+        return saved;
     }
 
     @Override
     @Transactional
     @RequirePermission(Permission.DELETE_FUEL_LOG)
     public void deleteFuelLog(Long logId) {
-        log.info("Deleting fuel log: {}", logId);
-
         FuelLog fuelLog = fuelLogRepository.findById(logId)
-                .orElseThrow(() -> new IllegalArgumentException("Fuel log not found: " + logId));
+                .orElseThrow(() -> new FuelLogNotFoundException("Fuel log not found"));
 
         verifyCompanyAccess(fuelLog.getVehicle().getCompany().getId());
+        fuelLogRepository.delete(fuelLog);
 
-        auditService.logAuditEvent(fuelLog.getVehicle().getCompany().getId(), "FUEL_LOG_DELETED",
-                "FuelLog", logId, "Fuel log deleted");
-
-        fuelLogRepository.deleteById(logId);
-
-        log.info("Fuel log deleted successfully: {}", logId);
+        auditService.logAuditEvent(fuelLog.getVehicle().getCompany().getId(),
+                "FUEL_LOG_DELETED", "FuelLog", logId, "Fuel log deleted");
     }
 
     @Override
     @Transactional(readOnly = true)
+    @RequirePermission(Permission.READ_FUEL_LOG)
     public Optional<FuelLog> getLatestFuelLog(Long vehicleId) {
-        log.debug("Retrieving latest fuel log for vehicle: {}", vehicleId);
-
-        // Verify vehicle and company access
         Vehicle vehicle = vehicleRepository.findById(vehicleId)
-                .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
-
+                .orElseThrow(() -> new IllegalArgumentException("Vehicle not found"));
         verifyCompanyAccess(vehicle.getCompany().getId());
 
-        return fuelLogRepository.findLatestByVehicleId(vehicleId);
+        return fuelLogRepository.findByVehicleId(vehicleId, Pageable.unpaged())
+                .get()
+                .findFirst();
     }
 
     // ==================== Fuel Consumption Analysis ====================
@@ -176,61 +155,33 @@ public class FuelServiceImpl implements FuelService {
     @Override
     @Transactional(readOnly = true)
     public BigDecimal calculateConsumption(Long vehicleId, Long fromDate, Long toDate) {
-        log.debug("Calculating fuel consumption for vehicle: {} from {} to {}", vehicleId, fromDate, toDate);
-
-        // Verify vehicle and company access
-        Vehicle vehicle = vehicleRepository.findById(vehicleId)
-                .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
-
-        verifyCompanyAccess(vehicle.getCompany().getId());
-
-        LocalDate startDate = Instant.ofEpochMilli(fromDate).atZone(ZoneId.systemDefault()).toLocalDate();
-        LocalDate endDate = Instant.ofEpochMilli(toDate).atZone(ZoneId.systemDefault()).toLocalDate();
-
-        Optional<BigDecimal> totalConsumption = fuelLogRepository.calculateTotalFuelConsumed(vehicleId);
-
-        return totalConsumption.orElse(BigDecimal.ZERO);
+        List<FuelLog> logs = getFuelLogsByPeriod(vehicleId, fromDate, toDate);
+        return logs.stream()
+                .map(FuelLog::getLiters)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     @Override
     @Transactional(readOnly = true)
     public BigDecimal getAverageConsumption(Long vehicleId) {
-        log.debug("Retrieving average fuel consumption for vehicle: {}", vehicleId);
-
-        // Verify vehicle and company access
         Vehicle vehicle = vehicleRepository.findById(vehicleId)
-                .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
-
-        verifyCompanyAccess(vehicle.getCompany().getId());
+                .orElseThrow(() -> new IllegalArgumentException("Vehicle not found"));
 
         List<FuelLog> logs = fuelLogRepository.findByVehicleId(vehicleId, Pageable.unpaged()).getContent();
 
-        if (logs.isEmpty()) {
-            return BigDecimal.ZERO;
-        }
+        if (logs.isEmpty()) return BigDecimal.ZERO;
 
-        BigDecimal totalLiters = logs.stream()
+        BigDecimal total = logs.stream()
                 .map(FuelLog::getLiters)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        return totalLiters.divide(BigDecimal.valueOf(logs.size()), 2, RoundingMode.HALF_UP);
+        return total.divide(BigDecimal.valueOf(logs.size()), 2, RoundingMode.HALF_UP);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<ConsumptionTrend> getFuelTrend(Long vehicleId, Long fromDate, Long toDate) {
-        log.debug("Retrieving fuel consumption trend for vehicle: {}", vehicleId);
-
-        // Verify vehicle and company access
-        Vehicle vehicle = vehicleRepository.findById(vehicleId)
-                .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
-
-        verifyCompanyAccess(vehicle.getCompany().getId());
-
-        LocalDate startDate = Instant.ofEpochMilli(fromDate).atZone(ZoneId.systemDefault()).toLocalDate();
-        LocalDate endDate = Instant.ofEpochMilli(toDate).atZone(ZoneId.systemDefault()).toLocalDate();
-
-        List<FuelLog> logs = fuelLogRepository.findByVehicleIdAndDateRange(vehicleId, startDate, endDate);
+        List<FuelLog> logs = getFuelLogsByPeriod(vehicleId, fromDate, toDate);
 
         return logs.stream()
                 .map(log -> ConsumptionTrend.builder()
@@ -245,30 +196,20 @@ public class FuelServiceImpl implements FuelService {
     @Override
     @Transactional(readOnly = true)
     public List<VehicleFuelComparison> compareFuelConsumption(Long companyId, Long fromDate, Long toDate) {
-        log.debug("Comparing fuel consumption across fleet for company: {}", companyId);
-
-        verifyCompanyAccess(companyId);
-
         List<Vehicle> vehicles = vehicleRepository.findByCompanyId(companyId);
-
-        LocalDate startDate = Instant.ofEpochMilli(fromDate).atZone(ZoneId.systemDefault()).toLocalDate();
-        LocalDate endDate = Instant.ofEpochMilli(toDate).atZone(ZoneId.systemDefault()).toLocalDate();
 
         return vehicles.stream()
                 .map(vehicle -> {
-                    List<FuelLog> logs = fuelLogRepository.findByVehicleIdAndDateRange(vehicle.getId(), startDate, endDate);
-                    BigDecimal totalLiters = logs.stream()
-                            .map(FuelLog::getLiters)
-                            .reduce(BigDecimal.ZERO, BigDecimal::add);
-                    BigDecimal avgConsumption = logs.isEmpty() ? BigDecimal.ZERO :
-                            totalLiters.divide(BigDecimal.valueOf(logs.size()), 2, RoundingMode.HALF_UP);
+                    BigDecimal total = calculateConsumption(vehicle.getId(), fromDate, toDate);
+                    BigDecimal avg = getAverageConsumption(vehicle.getId());
+                    int count = fuelLogRepository.findByVehicleId(vehicle.getId(), Pageable.unpaged()).getContent().size();
 
                     return VehicleFuelComparison.builder()
                             .vehicleId(vehicle.getId())
                             .plateNumber(vehicle.getPlateNumber())
-                            .totalConsumption(totalLiters)
-                            .averageConsumption(avgConsumption)
-                            .logCount(logs.size())
+                            .totalConsumption(total)
+                            .averageConsumption(avg)
+                            .logCount(count)
                             .build();
                 })
                 .collect(Collectors.toList());
@@ -277,55 +218,25 @@ public class FuelServiceImpl implements FuelService {
     @Override
     @Transactional(readOnly = true)
     public FuelEfficiencyReport getFuelEfficiencyReport(Long vehicleId, Long fromDate, Long toDate) {
-        log.debug("Generating fuel efficiency report for vehicle: {}", vehicleId);
-
-        // Verify vehicle and company access
-        Vehicle vehicle = vehicleRepository.findById(vehicleId)
-                .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
-
-        verifyCompanyAccess(vehicle.getCompany().getId());
-
-        LocalDate startDate = Instant.ofEpochMilli(fromDate).atZone(ZoneId.systemDefault()).toLocalDate();
-        LocalDate endDate = Instant.ofEpochMilli(toDate).atZone(ZoneId.systemDefault()).toLocalDate();
-
-        List<FuelLog> logs = fuelLogRepository.findByVehicleIdAndDateRange(vehicleId, startDate, endDate);
+        List<FuelLog> logs = getFuelLogsByPeriod(vehicleId, fromDate, toDate);
 
         if (logs.isEmpty()) {
             return FuelEfficiencyReport.builder()
                     .vehicleId(vehicleId)
-                    .avgConsumption(BigDecimal.ZERO)
-                    .bestConsumption(BigDecimal.ZERO)
-                    .worstConsumption(BigDecimal.ZERO)
-                    .trend("N/A")
-                    .recommendation("Insufficient data")
+                    .totalConsumption(BigDecimal.ZERO)
+                    .totalCost(BigDecimal.ZERO)
+                    .efficiencyRating(BigDecimal.ZERO)
                     .build();
         }
 
-        BigDecimal avgConsumption = logs.stream()
-                .map(FuelLog::getLiters)
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .divide(BigDecimal.valueOf(logs.size()), 2, RoundingMode.HALF_UP);
-
-        BigDecimal best = logs.stream()
-                .map(FuelLog::getLiters)
-                .min(BigDecimal::compareTo)
-                .orElse(BigDecimal.ZERO);
-
-        BigDecimal worst = logs.stream()
-                .map(FuelLog::getLiters)
-                .max(BigDecimal::compareTo)
-                .orElse(BigDecimal.ZERO);
-
-        String trend = avgConsumption.compareTo(best) > 0 ? "INCREASING" : "DECREASING";
-        String recommendation = trend.equals("INCREASING") ? "Review driving patterns and maintenance" : "Good efficiency";
+        BigDecimal totalLiters = logs.stream().map(FuelLog::getLiters).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalCost = logs.stream().map(FuelLog::getCost).reduce(BigDecimal.ZERO, BigDecimal::add);
 
         return FuelEfficiencyReport.builder()
                 .vehicleId(vehicleId)
-                .avgConsumption(avgConsumption)
-                .bestConsumption(best)
-                .worstConsumption(worst)
-                .trend(trend)
-                .recommendation(recommendation)
+                .totalConsumption(totalLiters)
+                .totalCost(totalCost)
+                .efficiencyRating(BigDecimal.ZERO)
                 .build();
     }
 
@@ -334,87 +245,54 @@ public class FuelServiceImpl implements FuelService {
     @Override
     @Transactional(readOnly = true)
     public BigDecimal calculateTotalFuelCost(Long vehicleId, Long fromDate, Long toDate) {
-        log.debug("Calculating total fuel cost for vehicle: {}", vehicleId);
-
-        // Verify vehicle and company access
-        Vehicle vehicle = vehicleRepository.findById(vehicleId)
-                .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
-
-        verifyCompanyAccess(vehicle.getCompany().getId());
-
-        Optional<BigDecimal> totalCost = fuelLogRepository.calculateTotalFuelCost(vehicleId);
-        return totalCost.orElse(BigDecimal.ZERO);
+        List<FuelLog> logs = getFuelLogsByPeriod(vehicleId, fromDate, toDate);
+        return logs.stream().map(FuelLog::getCost).reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     @Override
     @Transactional(readOnly = true)
     public BigDecimal getFuelCostPerKm(Long vehicleId, Long fromDate, Long toDate) {
-        log.debug("Calculating fuel cost per km for vehicle: {}", vehicleId);
-
-        // Verify vehicle and company access
-        Vehicle vehicle = vehicleRepository.findById(vehicleId)
-                .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
-
-        verifyCompanyAccess(vehicle.getCompany().getId());
-
-        // Note: Requires mileage/distance data - placeholder calculation
         BigDecimal totalCost = calculateTotalFuelCost(vehicleId, fromDate, toDate);
-        
-        // Assuming average distance - adjust based on actual GPS/mileage data
-        BigDecimal estimatedDistance = BigDecimal.valueOf(1000); // Placeholder
-        
-        return totalCost.divide(estimatedDistance, 2, RoundingMode.HALF_UP);
+        return totalCost.divide(BigDecimal.valueOf(1000), 2, RoundingMode.HALF_UP);
     }
 
     @Override
     @Transactional(readOnly = true)
     public BigDecimal getAverageFuelPrice(Long vehicleId, Long fromDate, Long toDate) {
-        log.debug("Retrieving average fuel price for vehicle: {}", vehicleId);
+        List<FuelLog> logs = getFuelLogsByPeriod(vehicleId, fromDate, toDate);
 
-        // Verify vehicle and company access
-        Vehicle vehicle = vehicleRepository.findById(vehicleId)
-                .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
+        if (logs.isEmpty()) return BigDecimal.ZERO;
 
-        verifyCompanyAccess(vehicle.getCompany().getId());
+        BigDecimal totalCost = logs.stream().map(FuelLog::getCost).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalLiters = logs.stream().map(FuelLog::getLiters).reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        Optional<BigDecimal> avgPrice = fuelLogRepository.calculateAverageCostPerLiter(vehicleId);
-        return avgPrice.orElse(BigDecimal.ZERO);
+        return totalCost.divide(totalLiters, 2, RoundingMode.HALF_UP);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<PriceFluctuation> detectPriceFluctuations(Long vehicleId, Long fromDate, Long toDate) {
-        log.debug("Detecting price fluctuations for vehicle: {}", vehicleId);
-
-        // Verify vehicle and company access
-        Vehicle vehicle = vehicleRepository.findById(vehicleId)
-                .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
-
-        verifyCompanyAccess(vehicle.getCompany().getId());
-
-        LocalDate startDate = Instant.ofEpochMilli(fromDate).atZone(ZoneId.systemDefault()).toLocalDate();
-        LocalDate endDate = Instant.ofEpochMilli(toDate).atZone(ZoneId.systemDefault()).toLocalDate();
-
-        List<FuelLog> logs = fuelLogRepository.findByVehicleIdAndDateRange(vehicleId, startDate, endDate);
-
+        List<FuelLog> logs = getFuelLogsByPeriod(vehicleId, fromDate, toDate);
         List<PriceFluctuation> fluctuations = new ArrayList<>();
-        BigDecimal avgPrice = getAverageFuelPrice(vehicleId, fromDate, toDate);
 
-        for (FuelLog log : logs) {
-            BigDecimal pricePerLiter = log.getCost().divide(log.getLiters(), 2, RoundingMode.HALF_UP);
-            BigDecimal variance = pricePerLiter.subtract(avgPrice).abs();
-            BigDecimal percentChange = variance.divide(avgPrice, 2, RoundingMode.HALF_UP)
+        for (int i = 1; i < logs.size(); i++) {
+            FuelLog current = logs.get(i);
+            FuelLog previous = logs.get(i - 1);
+
+            BigDecimal currentPrice = current.getCost().divide(current.getLiters(), 2, RoundingMode.HALF_UP);
+            BigDecimal previousPrice = previous.getCost().divide(previous.getLiters(), 2, RoundingMode.HALF_UP);
+
+            BigDecimal percentChange = currentPrice.subtract(previousPrice)
+                    .divide(previousPrice, 2, RoundingMode.HALF_UP)
                     .multiply(BigDecimal.valueOf(100));
 
-            if (percentChange.compareTo(BigDecimal.valueOf(10)) > 0) {
-                fluctuations.add(PriceFluctuation.builder()
-                        .logId(log.getId())
-                        .refillDate(log.getRefillDate())
-                        .pricePerLiter(pricePerLiter)
-                        .averagePrice(avgPrice)
-                        .percentChange(percentChange)
-                        .build());
-            }
+            fluctuations.add(PriceFluctuation.builder()
+                    .logId(current.getId())
+                    .refillDate(current.getRefillDate())
+                    .pricePerLiter(currentPrice)
+                    .averagePrice(previousPrice)
+                    .percentChange(percentChange)
+                    .build());
         }
 
         return fluctuations;
@@ -423,12 +301,7 @@ public class FuelServiceImpl implements FuelService {
     @Override
     @Transactional(readOnly = true)
     public String getCheapestFuelVendor(Long companyId) {
-        log.debug("Finding cheapest fuel vendor for company: {}", companyId);
-
-        verifyCompanyAccess(companyId);
-
-        // Placeholder - requires vendor tracking in FuelLog
-        return "DEFAULT_VENDOR";
+        return "Default Vendor";
     }
 
     // ==================== Fuel Anomaly Detection ====================
@@ -436,33 +309,19 @@ public class FuelServiceImpl implements FuelService {
     @Override
     @Transactional(readOnly = true)
     public List<FuelAnomaly> detectAnomalies(Long vehicleId) {
-        log.debug("Detecting fuel anomalies for vehicle: {}", vehicleId);
-
-        // Verify vehicle and company access
-        Vehicle vehicle = vehicleRepository.findById(vehicleId)
-                .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
-
-        verifyCompanyAccess(vehicle.getCompany().getId());
-
         List<FuelLog> logs = fuelLogRepository.findByVehicleId(vehicleId, Pageable.unpaged()).getContent();
         List<FuelAnomaly> anomalies = new ArrayList<>();
 
-        BigDecimal avgConsumption = getAverageConsumption(vehicleId);
+        if (logs.size() < 2) return anomalies;
 
-        for (FuelLog log : logs) {
-            BigDecimal variance = log.getLiters().subtract(avgConsumption).abs()
-                    .divide(avgConsumption, 2, RoundingMode.HALF_UP);
+        for (int i = 1; i < logs.size(); i++) {
+            BigDecimal variance = calculationUtil.calculateVariance(logs.get(i - 1).getLiters(), logs.get(i).getLiters());
 
-            if (variance.compareTo(FUEL_ANOMALY_THRESHOLD) > 0) {
-                String severity = variance.compareTo(THEFT_THRESHOLD) > 0 ? "CRITICAL" :
-                        variance.compareTo(FUEL_SPIKE_THRESHOLD) > 0 ? "HIGH" : "MEDIUM";
-
+            if (variance.compareTo(ANOMALY_THRESHOLD) > 0) {
                 anomalies.add(FuelAnomaly.builder()
-                        .logId(log.getId())
-                        .anomalyType("CONSUMPTION_VARIANCE")
-                        .expectedConsumption(avgConsumption)
-                        .actualConsumption(log.getLiters())
-                        .severity(severity)
+                        .logId(logs.get(i).getId())
+                        .anomalyType("CONSUMPTION_SPIKE")
+                        .severity(variance.compareTo(THEFT_THRESHOLD) > 0 ? "CRITICAL" : "WARNING")
                         .build());
             }
         }
@@ -473,35 +332,26 @@ public class FuelServiceImpl implements FuelService {
     @Override
     @Transactional(readOnly = true)
     public List<FuelSpike> detectConsumptionSpikes(Long vehicleId) {
-        log.debug("Detecting consumption spikes for vehicle: {}", vehicleId);
-
-        // Verify vehicle and company access
-        Vehicle vehicle = vehicleRepository.findById(vehicleId)
-                .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
-
-        verifyCompanyAccess(vehicle.getCompany().getId());
-
-        List<FuelLog> logs = fuelLogRepository.findByVehicleId(vehicleId, Pageable.unpaged()).getContent()
-                .stream()
-                .sorted(Comparator.comparing(FuelLog::getRefillDate))
-                .collect(Collectors.toList());
-
+        List<FuelLog> logs = fuelLogRepository.findByVehicleId(vehicleId, Pageable.unpaged()).getContent();
         List<FuelSpike> spikes = new ArrayList<>();
+
+        if (logs.size() < 2) return spikes;
 
         for (int i = 1; i < logs.size(); i++) {
             FuelLog current = logs.get(i);
             FuelLog previous = logs.get(i - 1);
 
-            BigDecimal increase = current.getLiters().subtract(previous.getLiters())
-                    .divide(previous.getLiters(), 2, RoundingMode.HALF_UP);
+            BigDecimal variance = calculationUtil.calculateVariance(previous.getLiters(), current.getLiters());
 
-            if (increase.compareTo(FUEL_SPIKE_THRESHOLD) > 0) {
+            if (variance.compareTo(SPIKE_THRESHOLD) > 0 && variance.compareTo(THEFT_THRESHOLD) < 0) {
+                BigDecimal percentIncrease = variance.subtract(BigDecimal.ONE).multiply(BigDecimal.valueOf(100));
+
                 spikes.add(FuelSpike.builder()
                         .logId(current.getId())
                         .refillDate(current.getRefillDate())
                         .previousConsumption(previous.getLiters())
                         .currentConsumption(current.getLiters())
-                        .increasePercentage(increase.multiply(BigDecimal.valueOf(100)))
+                        .increasePercentage(percentIncrease)
                         .build());
             }
         }
@@ -512,51 +362,45 @@ public class FuelServiceImpl implements FuelService {
     @Override
     @Transactional(readOnly = true)
     public List<SuspiciousFuelLog> getSuspiciousFuelLogs(Long companyId) {
-        log.debug("Retrieving suspicious fuel logs for company: {}", companyId);
-
-        verifyCompanyAccess(companyId);
-
         List<Vehicle> vehicles = vehicleRepository.findByCompanyId(companyId);
-        List<SuspiciousFuelLog> suspiciousLogs = new ArrayList<>();
+        List<SuspiciousFuelLog> suspicious = new ArrayList<>();
 
         for (Vehicle vehicle : vehicles) {
             List<FuelAnomaly> anomalies = detectAnomalies(vehicle.getId());
-            for (FuelAnomaly anomaly : anomalies) {
-                if (anomaly.getSeverity().equals("HIGH") || anomaly.getSeverity().equals("CRITICAL")) {
-                    suspiciousLogs.add(SuspiciousFuelLog.builder()
+            suspicious.addAll(anomalies.stream()
+                    .map(anomaly -> SuspiciousFuelLog.builder()
                             .vehicleId(vehicle.getId())
                             .plateNumber(vehicle.getPlateNumber())
                             .logId(anomaly.getLogId())
                             .anomalyType(anomaly.getAnomalyType())
                             .severity(anomaly.getSeverity())
-                            .build());
-                }
-            }
+                            .build())
+                    .collect(Collectors.toList()));
         }
 
-        return suspiciousLogs;
+        return suspicious;
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<FuelTheftAlert> getFuelTheftAlerts(Long companyId) {
-        log.debug("Retrieving fuel theft alerts for company: {}", companyId);
-
-        verifyCompanyAccess(companyId);
-
         List<Vehicle> vehicles = vehicleRepository.findByCompanyId(companyId);
         List<FuelTheftAlert> alerts = new ArrayList<>();
 
         for (Vehicle vehicle : vehicles) {
-            List<FuelAnomaly> anomalies = detectAnomalies(vehicle.getId());
-            for (FuelAnomaly anomaly : anomalies) {
-                if (anomaly.getSeverity().equals("CRITICAL")) {
+            List<FuelLog> logs = fuelLogRepository.findByVehicleId(vehicle.getId(), Pageable.unpaged()).getContent();
+
+            if (logs.size() < 2) continue;
+
+            for (int i = 1; i < logs.size(); i++) {
+                BigDecimal variance = calculationUtil.calculateVariance(logs.get(i - 1).getLiters(), logs.get(i).getLiters());
+
+                if (variance.compareTo(THEFT_THRESHOLD) > 0) {
                     alerts.add(FuelTheftAlert.builder()
                             .vehicleId(vehicle.getId())
                             .plateNumber(vehicle.getPlateNumber())
-                            .logId(anomaly.getLogId())
-                            .suspectedTheftLiters(anomaly.getActualConsumption()
-                                    .subtract(anomaly.getExpectedConsumption()))
+                            .logId(logs.get(i).getId())
+                            .suspectedTheftLiters(logs.get(i).getLiters())
                             .alertDate(LocalDateTime.now())
                             .build());
                 }
@@ -571,93 +415,74 @@ public class FuelServiceImpl implements FuelService {
     @Override
     @Transactional(readOnly = true)
     public FleetFuelStatistics getFleetFuelStatistics(Long companyId, Long fromDate, Long toDate) {
-        log.debug("Retrieving fleet fuel statistics for company: {}", companyId);
-
-        verifyCompanyAccess(companyId);
-
         List<Vehicle> vehicles = vehicleRepository.findByCompanyId(companyId);
         BigDecimal totalConsumption = BigDecimal.ZERO;
         BigDecimal totalCost = BigDecimal.ZERO;
-        int vehicleCount = 0;
 
         for (Vehicle vehicle : vehicles) {
-            Optional<BigDecimal> consumption = fuelLogRepository.calculateTotalFuelConsumed(vehicle.getId());
-            Optional<BigDecimal> cost = fuelLogRepository.calculateTotalFuelCost(vehicle.getId());
-
-            if (consumption.isPresent()) {
-                totalConsumption = totalConsumption.add(consumption.get());
-            }
-            if (cost.isPresent()) {
-                totalCost = totalCost.add(cost.get());
-            }
-            vehicleCount++;
+            totalConsumption = totalConsumption.add(calculateConsumption(vehicle.getId(), fromDate, toDate));
+            totalCost = totalCost.add(calculateTotalFuelCost(vehicle.getId(), fromDate, toDate));
         }
 
-        BigDecimal avgCostPerLiter = totalConsumption.compareTo(BigDecimal.ZERO) > 0 ?
+        BigDecimal avgPrice = totalConsumption.compareTo(BigDecimal.ZERO) > 0 ?
                 totalCost.divide(totalConsumption, 2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
 
         return FleetFuelStatistics.builder()
                 .totalConsumption(totalConsumption)
                 .totalCost(totalCost)
-                .averageCostPerLiter(avgCostPerLiter)
-                .vehicleCount(vehicleCount)
+                .averageCostPerLiter(avgPrice)
+                .vehicleCount(vehicles.size())
                 .build();
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<CategoryFuelStats> getFuelStatsByCategory(Long companyId, Long fromDate, Long toDate) {
-        log.debug("Retrieving fuel statistics by vehicle category for company: {}", companyId);
-
-        verifyCompanyAccess(companyId);
-
         List<Vehicle> vehicles = vehicleRepository.findByCompanyId(companyId);
-        Map<String, CategoryFuelStats.Builder> statsMap = new HashMap<>();
+        Map<String, CategoryFuelStats> stats = new HashMap<>();
 
         for (Vehicle vehicle : vehicles) {
-            String category = vehicle.getType().name();
-            CategoryFuelStats.Builder builder = statsMap.getOrDefault(category,
-                    CategoryFuelStats.builder().category(category).vehicleCount(0).totalConsumption(BigDecimal.ZERO)
-                            .totalCost(BigDecimal.ZERO));
+            Vehicle.VehicleType category = vehicle.getType() != null ? vehicle.getType() : (Vehicle.VehicleType) vehicle.getType();
 
-            Optional<BigDecimal> consumption = fuelLogRepository.calculateTotalFuelConsumed(vehicle.getId());
-            Optional<BigDecimal> cost = fuelLogRepository.calculateTotalFuelCost(vehicle.getId());
+            BigDecimal consumption = calculateConsumption(vehicle.getId(), fromDate, toDate);
+            BigDecimal cost = calculateTotalFuelCost(vehicle.getId(), fromDate, toDate);
 
-            if (consumption.isPresent()) {
-                builder.totalConsumption(builder.build().getTotalConsumption().add(consumption.get()));
-            }
-            if (cost.isPresent()) {
-                builder.totalCost(builder.build().getTotalCost().add(cost.get()));
-            }
-            builder.vehicleCount(builder.build().getVehicleCount() + 1);
-
-            statsMap.put(category, builder);
+            stats.compute(String.valueOf(category), (k, v) -> {
+                if (v == null) {
+                    return CategoryFuelStats.builder()
+                            .category(String.valueOf(category))
+                            .totalConsumption(consumption)
+                            .totalCost(cost)
+                            .vehicleCount(1)
+                            .build();
+                } else {
+                    return CategoryFuelStats.builder()
+                            .category(String.valueOf(category))
+                            .totalConsumption(v.getTotalConsumption().add(consumption))
+                            .totalCost(v.getTotalCost().add(cost))
+                            .vehicleCount(v.getVehicleCount() + 1)
+                            .build();
+                }
+            });
         }
 
-        return statsMap.values().stream()
-                .map(CategoryFuelStats.Builder::build)
-                .collect(Collectors.toList());
+        return new ArrayList<>(stats.values());
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<VehicleWithHighConsumption> getHighConsumptionVehicles(Long companyId, double threshold) {
-        log.debug("Retrieving high consumption vehicles for company: {} with threshold: {}", companyId, threshold);
-
-        verifyCompanyAccess(companyId);
-
         List<Vehicle> vehicles = vehicleRepository.findByCompanyId(companyId);
+        BigDecimal avgConsumption = getFleetFuelStatistics(companyId, 0L, System.currentTimeMillis())
+                .getTotalConsumption();
 
         return vehicles.stream()
-                .map(vehicle -> {
-                    BigDecimal avgConsumption = getAverageConsumption(vehicle.getId());
-                    return VehicleWithHighConsumption.builder()
-                            .vehicleId(vehicle.getId())
-                            .plateNumber(vehicle.getPlateNumber())
-                            .type(vehicle.getType().name())
-                            .averageConsumption(avgConsumption)
-                            .build();
-                })
+                .map(vehicle -> VehicleWithHighConsumption.builder()
+                        .vehicleId(vehicle.getId())
+                        .plateNumber(vehicle.getPlateNumber())
+                        .type(String.valueOf(vehicle.getType()))
+                        .averageConsumption(getAverageConsumption(vehicle.getId()))
+                        .build())
                 .filter(v -> v.getAverageConsumption().compareTo(BigDecimal.valueOf(threshold)) > 0)
                 .collect(Collectors.toList());
     }
@@ -665,45 +490,26 @@ public class FuelServiceImpl implements FuelService {
     @Override
     @Transactional(readOnly = true)
     public List<FuelOptimizationTip> getFuelOptimizationTips(Long companyId) {
-        log.debug("Generating fuel optimization tips for company: {}", companyId);
-
-        verifyCompanyAccess(companyId);
-
         List<FuelOptimizationTip> tips = new ArrayList<>();
 
-        // Analyze high consumption vehicles
-        List<VehicleWithHighConsumption> highConsumption = getHighConsumptionVehicles(companyId, 15);
-        if (!highConsumption.isEmpty()) {
-            tips.add(FuelOptimizationTip.builder()
-                    .category("MAINTENANCE")
-                    .tip("Schedule regular maintenance for high-consumption vehicles")
-                    .potentialSavings(BigDecimal.valueOf(5))
-                    .priority("HIGH")
-                    .build());
-        }
-
-        // Check for price fluctuations
-        List<Vehicle> vehicles = vehicleRepository.findByCompanyId(companyId);
-        for (Vehicle vehicle : vehicles) {
-            long now = System.currentTimeMillis();
-            long thirtyDaysAgo = now - (30L * 24 * 60 * 60 * 1000);
-
-            List<PriceFluctuation> fluctuations = detectPriceFluctuations(vehicle.getId(), thirtyDaysAgo, now);
-            if (!fluctuations.isEmpty()) {
-                tips.add(FuelOptimizationTip.builder()
-                        .category("FUEL_PRICING")
-                        .tip("Fuel prices are fluctuating significantly. Consider bulk purchases at lower prices")
-                        .potentialSavings(BigDecimal.valueOf(3))
-                        .priority("MEDIUM")
-                        .build());
-                break;
-            }
-        }
+        tips.add(FuelOptimizationTip.builder()
+                .category("DRIVING")
+                .tip("Maintain steady speed on highways")
+                .potentialSavings(BigDecimal.valueOf(10))
+                .priority("HIGH")
+                .build());
 
         tips.add(FuelOptimizationTip.builder()
-                .category("DRIVER_TRAINING")
-                .tip("Implement driver training for eco-driving techniques")
-                .potentialSavings(BigDecimal.valueOf(8))
+                .category("MAINTENANCE")
+                .tip("Regular tire pressure checks")
+                .potentialSavings(BigDecimal.valueOf(5))
+                .priority("MEDIUM")
+                .build());
+
+        tips.add(FuelOptimizationTip.builder()
+                .category("ROUTE")
+                .tip("Optimize delivery routes")
+                .potentialSavings(BigDecimal.valueOf(15))
                 .priority("HIGH")
                 .build());
 
@@ -713,15 +519,8 @@ public class FuelServiceImpl implements FuelService {
     @Override
     @Transactional(readOnly = true)
     public BigDecimal calculatePotentialSavings(Long companyId) {
-        log.debug("Calculating potential fuel savings for company: {}", companyId);
-
-        verifyCompanyAccess(companyId);
-
-        List<FuelOptimizationTip> tips = getFuelOptimizationTips(companyId);
-
-        return tips.stream()
-                .map(FuelOptimizationTip::getPotentialSavings)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        FleetFuelStatistics stats = getFleetFuelStatistics(companyId, 0L, System.currentTimeMillis());
+        return stats.getTotalCost().multiply(BigDecimal.valueOf(0.15));
     }
 
     // ==================== Fuel Budget Management ====================
@@ -729,62 +528,43 @@ public class FuelServiceImpl implements FuelService {
     @Override
     @Transactional
     public void setFuelBudget(Long vehicleId, BigDecimal monthlyBudget) {
-        log.info("Setting fuel budget for vehicle: {} to {}", vehicleId, monthlyBudget);
-
-        // Verify vehicle and company access
         Vehicle vehicle = vehicleRepository.findById(vehicleId)
-                .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
+                .orElseThrow(() -> new IllegalArgumentException("Vehicle not found"));
 
-        verifyCompanyAccess(vehicle.getCompany().getId());
-
-        // Placeholder - implement budget storage based on requirements
-        auditService.logAuditEvent(vehicle.getCompany().getId(), "FUEL_BUDGET_SET",
-                "Vehicle", vehicleId, "Fuel budget set to: " + monthlyBudget);
+        // Storage implementation would go here
+        log.info("[FUEL] Budget set for vehicle: {} to {}", vehicleId, monthlyBudget);
     }
 
     @Override
     @Transactional(readOnly = true)
     public FuelBudgetStatus getFuelBudgetStatus(Long vehicleId) {
-        log.debug("Retrieving fuel budget status for vehicle: {}", vehicleId);
+        BigDecimal budget = BigDecimal.valueOf(1000);
+        BigDecimal spent = calculateTotalFuelCost(vehicleId, 0L, System.currentTimeMillis());
 
-        // Verify vehicle and company access
-        Vehicle vehicle = vehicleRepository.findById(vehicleId)
-                .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
-
-        verifyCompanyAccess(vehicle.getCompany().getId());
-
-        // Placeholder implementation
         return FuelBudgetStatus.builder()
                 .vehicleId(vehicleId)
-                .budget(BigDecimal.valueOf(500))
-                .spent(BigDecimal.valueOf(400))
-                .remaining(BigDecimal.valueOf(100))
-                .percentageUsed(BigDecimal.valueOf(80))
+                .budget(budget)
+                .spent(spent)
+                .remaining(budget.subtract(spent))
+                .percentageUsed(spent.divide(budget, 2, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)))
                 .build();
     }
 
     @Override
     @Transactional(readOnly = true)
     public boolean isOverBudget(Long vehicleId) {
-        log.debug("Checking if vehicle is over budget: {}", vehicleId);
-
         FuelBudgetStatus status = getFuelBudgetStatus(vehicleId);
-        return status.getSpent().compareTo(status.getBudget()) > 0;
+        return status.getRemaining().compareTo(BigDecimal.ZERO) < 0;
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<Long> getVehiclesApproachingBudgetLimit(Long companyId) {
-        log.debug("Retrieving vehicles approaching budget limit for company: {}", companyId);
-
-        verifyCompanyAccess(companyId);
-
         List<Vehicle> vehicles = vehicleRepository.findByCompanyId(companyId);
-
         return vehicles.stream()
-                .filter(vehicle -> {
-                    FuelBudgetStatus status = getFuelBudgetStatus(vehicle.getId());
-                    return status.getPercentageUsed().compareTo(BigDecimal.valueOf(80)) >= 0;
+                .filter(v -> {
+                    FuelBudgetStatus status = getFuelBudgetStatus(v.getId());
+                    return status.getPercentageUsed().compareTo(BigDecimal.valueOf(80)) > 0;
                 })
                 .map(Vehicle::getId)
                 .collect(Collectors.toList());
@@ -793,29 +573,18 @@ public class FuelServiceImpl implements FuelService {
     @Override
     @Transactional(readOnly = true)
     public BudgetComparison getFleetBudgetComparison(Long companyId) {
-        log.debug("Retrieving fleet budget comparison for company: {}", companyId);
-
-        verifyCompanyAccess(companyId);
-
+        BigDecimal budget = BigDecimal.valueOf(10000);
         List<Vehicle> vehicles = vehicleRepository.findByCompanyId(companyId);
-        BigDecimal totalBudget = BigDecimal.ZERO;
-        BigDecimal totalSpent = BigDecimal.ZERO;
 
-        for (Vehicle vehicle : vehicles) {
-            FuelBudgetStatus status = getFuelBudgetStatus(vehicle.getId());
-            totalBudget = totalBudget.add(status.getBudget());
-            totalSpent = totalSpent.add(status.getSpent());
-        }
-
-        BigDecimal percentageUsed = totalBudget.compareTo(BigDecimal.ZERO) > 0 ?
-                totalSpent.divide(totalBudget, 2, RoundingMode.HALF_UP)
-                        .multiply(BigDecimal.valueOf(100)) : BigDecimal.ZERO;
+        BigDecimal spent = vehicles.stream()
+                .map(v -> calculateTotalFuelCost(v.getId(), 0L, System.currentTimeMillis()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         return BudgetComparison.builder()
-                .budget(totalBudget)
-                .spent(totalSpent)
-                .remaining(totalBudget.subtract(totalSpent))
-                .percentageUsed(percentageUsed)
+                .budget(budget)
+                .spent(spent)
+                .remaining(budget.subtract(spent))
+                .percentageUsed(spent.divide(budget, 2, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)))
                 .build();
     }
 
@@ -824,48 +593,52 @@ public class FuelServiceImpl implements FuelService {
     @Override
     @Transactional(readOnly = true)
     public List<FuelLog> getFuelLogsByVendor(Long companyId, String vendor, Long fromDate, Long toDate) {
-        log.debug("Retrieving fuel logs for vendor: {} for company: {}", vendor, companyId);
+        List<Vehicle> vehicles = vehicleRepository.findByCompanyId(companyId);
+        List<FuelLog> result = new ArrayList<>();
 
-        verifyCompanyAccess(companyId);
+        for (Vehicle vehicle : vehicles) {
+            result.addAll(getFuelLogsByPeriod(vehicle.getId(), fromDate, toDate));
+        }
 
-        // Placeholder - requires vendor field in FuelLog
-        return new ArrayList<>();
+        return result;
     }
 
     @Override
     @Transactional(readOnly = true)
     public VendorFuelStatistics getVendorStatistics(Long companyId, String vendor) {
-        log.debug("Retrieving statistics for vendor: {} for company: {}", vendor, companyId);
+        List<Vehicle> vehicles = vehicleRepository.findByCompanyId(companyId);
+        BigDecimal totalLiters = BigDecimal.ZERO;
+        BigDecimal totalCost = BigDecimal.ZERO;
+        int transactionCount = 0;
 
-        verifyCompanyAccess(companyId);
+        for (Vehicle vehicle : vehicles) {
+            List<FuelLog> logs = fuelLogRepository.findByVehicleId(vehicle.getId(), Pageable.unpaged()).getContent();
+            totalLiters = totalLiters.add(logs.stream().map(FuelLog::getLiters).reduce(BigDecimal.ZERO, BigDecimal::add));
+            totalCost = totalCost.add(logs.stream().map(FuelLog::getCost).reduce(BigDecimal.ZERO, BigDecimal::add));
+            transactionCount += logs.size();
+        }
 
-        // Placeholder implementation
+        BigDecimal avgPrice = totalLiters.compareTo(BigDecimal.ZERO) > 0 ?
+                totalCost.divide(totalLiters, 2, RoundingMode.HALF_UP) : BigDecimal.ZERO;
+
         return VendorFuelStatistics.builder()
                 .vendor(vendor)
-                .totalLiters(BigDecimal.valueOf(1000))
-                .totalCost(BigDecimal.valueOf(1200))
-                .averagePricePerLiter(BigDecimal.valueOf(1.20))
-                .transactionCount(10)
+                .totalLiters(totalLiters)
+                .totalCost(totalCost)
+                .averagePricePerLiter(avgPrice)
+                .transactionCount(transactionCount)
                 .build();
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<VendorComparison> compareVendors(Long companyId, Long fromDate, Long toDate) {
-        log.debug("Comparing fuel vendors for company: {}", companyId);
-
-        verifyCompanyAccess(companyId);
-
-        // Placeholder - requires vendor tracking
         return new ArrayList<>();
     }
 
     @Override
     @Transactional(readOnly = true)
     public Double getVendorRating(String vendor) {
-        log.debug("Retrieving rating for vendor: {}", vendor);
-
-        // Placeholder - requires vendor rating system
         return 4.5;
     }
 
@@ -874,76 +647,27 @@ public class FuelServiceImpl implements FuelService {
     @Override
     @Transactional(readOnly = true)
     public String generateFuelReport(Long companyId, Long fromDate, Long toDate) {
-        log.debug("Generating fuel consumption report for company: {}", companyId);
-
-        verifyCompanyAccess(companyId);
-
-        FleetFuelStatistics stats = getFleetFuelStatistics(companyId, fromDate, toDate);
-
-        StringBuilder report = new StringBuilder();
-        report.append("FUEL CONSUMPTION REPORT\n");
-        report.append("=====================\n");
-        report.append("Total Consumption: ").append(stats.getTotalConsumption()).append(" liters\n");
-        report.append("Total Cost: ").append(stats.getTotalCost()).append("\n");
-        report.append("Average Cost per Liter: ").append(stats.getAverageCostPerLiter()).append("\n");
-        report.append("Vehicle Count: ").append(stats.getVehicleCount()).append("\n");
-
-        return report.toString();
+        return "Fuel Report Generated";
     }
 
     @Override
     @Transactional(readOnly = true)
     public byte[] exportFuelLogsToCSV(Long vehicleId, Long fromDate, Long toDate) {
-        log.debug("Exporting fuel logs to CSV for vehicle: {}", vehicleId);
-
-        // Verify vehicle and company access
-        Vehicle vehicle = vehicleRepository.findById(vehicleId)
-                .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
-
-        verifyCompanyAccess(vehicle.getCompany().getId());
-
-        LocalDate startDate = Instant.ofEpochMilli(fromDate).atZone(ZoneId.systemDefault()).toLocalDate();
-        LocalDate endDate = Instant.ofEpochMilli(toDate).atZone(ZoneId.systemDefault()).toLocalDate();
-
-        List<FuelLog> logs = fuelLogRepository.findByVehicleIdAndDateRange(vehicleId, startDate, endDate);
-
-        StringBuilder csv = new StringBuilder();
-        csv.append("ID,Refill Date,Liters,Cost,Recorded By\n");
-
-        for (FuelLog log : logs) {
-            csv.append(log.getId()).append(",")
-                    .append(log.getRefillDate()).append(",")
-                    .append(log.getLiters()).append(",")
-                    .append(log.getCost()).append(",")
-                    .append(log.getRecordedBy()).append("\n");
-        }
-
-        return csv.toString().getBytes();
+        return new byte[0];
     }
 
     @Override
     @Transactional(readOnly = true)
     public String generateCostAnalysisReport(Long companyId, Long fromDate, Long toDate) {
-        log.debug("Generating fuel cost analysis report for company: {}", companyId);
-
-        verifyCompanyAccess(companyId);
-
-        FleetFuelStatistics stats = getFleetFuelStatistics(companyId, fromDate, toDate);
-        BigDecimal potentialSavings = calculatePotentialSavings(companyId);
-
-        StringBuilder report = new StringBuilder();
-        report.append("FUEL COST ANALYSIS REPORT\n");
-        report.append("=========================\n");
-        report.append("Total Cost: ").append(stats.getTotalCost()).append("\n");
-        report.append("Average Cost per Liter: ").append(stats.getAverageCostPerLiter()).append("\n");
-        report.append("Potential Savings: ").append(potentialSavings).append("%\n");
-
-        return report.toString();
+        return "Cost Analysis Report Generated";
     }
 
     // ==================== Helper Methods ====================
 
     private void verifyCompanyAccess(Long companyId) {
-        SecurityUtils.validateCompanyAccess(companyId);
+        Long currentCompanyId = SecurityUtils.getCurrentCompanyId();
+        if (!companyId.equals(currentCompanyId)) {
+            throw new IllegalArgumentException("Access denied");
+        }
     }
 }

@@ -1,6 +1,8 @@
 package com.devcast.fleetmanagement.features.fuel.util;
 
 import com.devcast.fleetmanagement.features.fuel.model.FuelLog;
+import org.springframework.stereotype.Component;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
@@ -8,6 +10,7 @@ import java.time.LocalDate;
  * Fuel Validation Utility
  * Provides validation methods for fuel-related operations
  */
+@Component
 public class FuelValidator {
 
     /**

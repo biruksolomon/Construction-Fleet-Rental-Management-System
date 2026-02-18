@@ -64,7 +64,7 @@ public interface FuelLogRepository extends JpaRepository<FuelLog, Long> {
     long countByVehicleId(Long vehicleId);
 
     /**
-     * Find fuel logs by recorded source
+     * Find fuel logs within date range for a specific vehicle
      */
-    Page<FuelLog> findByVehicleIdAndRecordedBy(Long vehicleId, FuelLog.RecordedBy recordedBy, Pageable pageable);
+    List<FuelLog> findByVehicleIdAndRefillDateBetween(Long vehicleId, LocalDate startDate, LocalDate endDate);
 }
