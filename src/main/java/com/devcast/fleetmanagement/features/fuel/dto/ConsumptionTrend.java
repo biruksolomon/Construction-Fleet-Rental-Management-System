@@ -4,13 +4,14 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 @Data
 @Builder
 public class ConsumptionTrend {
 
-    private Long date;
-    private BigDecimal consumption;
+    private LocalDate date;
+    private BigDecimal liters;
     private BigDecimal cost;
-    private Long mileage;
+    private BigDecimal pricePerLiter;
 }

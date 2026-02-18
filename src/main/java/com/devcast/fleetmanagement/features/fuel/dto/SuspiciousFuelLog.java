@@ -7,10 +7,10 @@ import lombok.Data;
 @Builder
 public class SuspiciousFuelLog {
 
-    private Long logId;
     private Long vehicleId;
-    private String issue;
+    private String plateNumber;
+    private Long logId;
+    private String anomalyType;
     private String severity;
-    private Long date;
 }
 

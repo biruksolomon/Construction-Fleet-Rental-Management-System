@@ -10,8 +10,8 @@ import java.math.BigDecimal;
 public class VehicleFuelComparison {
 
     private Long vehicleId;
-    private String registrationNumber;
-    private BigDecimal avgConsumption;
-    private BigDecimal totalCost;
-    private String comparison;
+    private String plateNumber;
+    private BigDecimal totalConsumption;
+    private BigDecimal averageConsumption;
+    private int logCount;
 }

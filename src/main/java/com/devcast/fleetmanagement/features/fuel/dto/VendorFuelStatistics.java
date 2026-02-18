@@ -10,8 +10,8 @@ import java.math.BigDecimal;
 public class VendorFuelStatistics {
 
     private String vendor;
-    private int logCount;
     private BigDecimal totalLiters;
-    private BigDecimal avgPrice;
     private BigDecimal totalCost;
+    private BigDecimal averagePricePerLiter;
+    private int transactionCount;
 }

@@ -11,6 +11,6 @@ public class CategoryFuelStats {
 
     private String category;
     private BigDecimal totalConsumption;
-    private BigDecimal avgConsumption;
     private BigDecimal totalCost;
+    private int vehicleCount;
 }

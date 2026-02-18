@@ -10,9 +10,8 @@ import java.math.BigDecimal;
 public class FuelBudgetStatus {
 
     private Long vehicleId;
-    private BigDecimal budgetLimit;
+    private BigDecimal budget;
     private BigDecimal spent;
     private BigDecimal remaining;
-    private Double percentageUsed;
-    private String status;
+    private BigDecimal percentageUsed;
 }

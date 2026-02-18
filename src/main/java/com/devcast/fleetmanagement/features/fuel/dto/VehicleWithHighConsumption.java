@@ -10,9 +10,8 @@ import java.math.BigDecimal;
 public class VehicleWithHighConsumption {
 
     private Long vehicleId;
-    private String registrationNumber;
-    private BigDecimal consumption;
-    private BigDecimal percentageAboveAvg;
-    private String recommendation;
+    private String plateNumber;
+    private String type;
+    private BigDecimal averageConsumption;
 }
 

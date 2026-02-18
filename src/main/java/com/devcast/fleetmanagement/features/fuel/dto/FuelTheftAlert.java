@@ -4,14 +4,15 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Data
 @Builder
 public class FuelTheftAlert {
 
     private Long vehicleId;
-    private String registrationNumber;
-    private BigDecimal suspectedAmount;
-    private String reasoning;
-    private String severity;
+    private String plateNumber;
+    private Long logId;
+    private BigDecimal suspectedTheftLiters;
+    private LocalDateTime alertDate;
 }

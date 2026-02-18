@@ -4,15 +4,16 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 @Data
 @Builder
 public class FuelSpike {
 
-    private Long vehicleId;
     private Long logId;
-    private BigDecimal spike;
-    private String explanation;
-    private String action;
+    private LocalDate refillDate;
+    private BigDecimal previousConsumption;
+    private BigDecimal currentConsumption;
+    private BigDecimal increasePercentage;
 }
 

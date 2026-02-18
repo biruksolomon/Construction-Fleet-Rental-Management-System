@@ -9,9 +9,8 @@ import java.math.BigDecimal;
 @Builder
 public class BudgetComparison {
 
-    private Long companyId;
-    private BigDecimal totalBudget;
-    private BigDecimal totalSpent;
-    private BigDecimal variance;
-    private String status;
+    private BigDecimal budget;
+    private BigDecimal spent;
+    private BigDecimal remaining;
+    private BigDecimal percentageUsed;
 }

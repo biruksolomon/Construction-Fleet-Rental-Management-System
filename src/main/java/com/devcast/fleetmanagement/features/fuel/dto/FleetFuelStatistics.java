@@ -9,11 +9,9 @@ import java.math.BigDecimal;
 @Builder
 public class FleetFuelStatistics {
 
-    private Long companyId;
     private BigDecimal totalConsumption;
     private BigDecimal totalCost;
-    private BigDecimal avgConsumption;
+    private BigDecimal averageCostPerLiter;
     private int vehicleCount;
-    private BigDecimal costPerKm;
 }
 
